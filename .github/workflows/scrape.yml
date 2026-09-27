@@ -71,6 +71,11 @@ jobs:
 
       - name: Crawl
         env:
+          # The pooled endpoint is correct for every process here, scraper
+          # included: the upserts are written pooler-safe (no interactive
+          # transactions), which is what a serverless free-tier database wants.
+          # Routing the scraper at a direct endpoint does not help — the free
+          # compute refuses direct connections while it is suspended.
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
           TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}

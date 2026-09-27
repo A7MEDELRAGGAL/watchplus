@@ -9,10 +9,23 @@
  *   npm run scrape -- --ids 21,529  re-fetch specific provider ids
  */
 import 'dotenv/config';
-import { prisma } from '../src/lib/db';
-import { allProviders, getProvider, selectedProviders } from '../src/lib/scraper/core/registry';
-import { runProvider } from '../src/lib/scraper/pipeline/run';
+
+// Type-only, so it is erased at compile time and cannot pull Prisma in early.
 import type { Provider } from '../src/lib/scraper/types';
+
+type PrismaModule = typeof import('../src/lib/db');
+type RegistryModule = typeof import('../src/lib/scraper/core/registry');
+type RunModule = typeof import('../src/lib/scraper/pipeline/run');
+
+let prismaMod: PrismaModule;
+let registry: RegistryModule;
+let run: RunModule;
+
+async function loadPrisma() {
+  prismaMod = await import('../src/lib/db');
+  registry = await import('../src/lib/scraper/core/registry');
+  run = await import('../src/lib/scraper/pipeline/run');
+}
 
 function parseArgs(argv: string[]) {
   const providers: string[] = [];
@@ -38,13 +51,14 @@ function pad(value: string, width: number) {
 }
 
 async function main() {
+  await loadPrisma();
   const args = parseArgs(process.argv.slice(2));
   process.env.SCRAPER_DRY_RUN = args.dry ? '1' : '0';
   if (args.verbose) process.env.SCRAPER_VERBOSE = '1';
 
   console.log('\n  registered providers');
   console.log('  ' + '-'.repeat(64));
-  for (const p of allProviders()) {
+  for (const p of registry.allProviders()) {
     const ok = p.isConfigured();
     console.log(
       `  ${ok ? 'x' : ' '} ${pad(p.key, 14)} ${pad(p.kind, 6)} ${pad(p.priority.toString(), 5)} ${p.name}${
@@ -57,12 +71,12 @@ async function main() {
   const providers: Provider[] = args.providers.length
     ? args.providers
         .map((key) => {
-          const p = getProvider(key);
+          const p = registry.getProvider(key);
           if (!p) throw new Error(`unknown provider "${key}". Run without args to list them.`);
           return p;
         })
         .filter((p) => p.isConfigured())
-    : selectedProviders();
+    : registry.selectedProviders();
 
   if (!providers.length) {
     console.error('  No usable providers. Set TMDB_API_KEY, or declare a source in SOURCES_JSON.');
@@ -74,7 +88,7 @@ async function main() {
 
   for (const provider of providers) {
     console.log(`  running ${provider.name} (${provider.key})...`);
-    const report = await runProvider({
+    const report = await run.runProvider({
       provider,
       maxPages: args.pages,
       dryRun: args.dry,
@@ -102,10 +116,10 @@ async function main() {
     `  total in ${((Date.now() - started) / 1000).toFixed(1)}s: ${totals.imported} new, ${totals.updated} updated, ${totals.errors} errors`,
   );
 
-  const count = await prisma.title.count();
+  const count = await prismaMod.prisma.title.count();
   console.log(`  database now holds ${count} title(s)\n`);
 
-  await prisma.$disconnect();
+  await prismaMod.prisma.$disconnect();
 
   // A run that imported something is a success even if individual items failed:
   // rate limits are routine, and a red CI run on every 429 trains you to ignore
@@ -121,6 +135,6 @@ async function main() {
 
 main().catch(async (err) => {
   console.error('\n  scrape failed:', err instanceof Error ? err.message : err);
-  await prisma.$disconnect().catch(() => {});
+  await prismaMod.prisma.$disconnect().catch(() => {});
   process.exit(1);
 });

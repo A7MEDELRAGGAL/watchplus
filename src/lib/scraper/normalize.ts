@@ -181,17 +181,21 @@ function normalizeStream(s: import('./types').StreamLink, fallbackProvider: stri
 }
 /**
  * Slug must be unique across the whole table, and ids are only unique *within* a
- * provider: AniList anime 21 and MAL anime 21 are different shows. So the
- * provider key is always part of the slug, otherwise the second source to import
- * a given id dies on the unique constraint.
+ * provider: AniList anime 21 and MAL anime 21 are different shows. So the slug
+ * is namespaced by a short hash of `provider:providerId` — a fixed 5-char suffix
+ * that no two different sources can realistically agree on.
+ *
+ * The readable title is kept even when the provider id is numeric. A previous
+ * version special-cased numeric ids into `anime-anilist-103303`, which is unique
+ * but unreadable, and it hit every AniList and Jikan row — the two providers that
+ * matter most. Titles carry accents and CJK; the hash handles the guarantee that
+ * the id used to provide.
+ *
+ * If two hashes ever did collide, `claimSlug` in the upsert appends `-2`. The
+ * slug is also only ever assigned on create, so URLs stay stable across re-runs.
  */
-function buildSlug(detail: TitleDetail, title: string, providerKey: string): { slug: string } {
-  const scope = `${detail.kind.toLowerCase()}-${providerKey}`;
-  const numeric = /^\d+$/.test(detail.providerId);
-  if (numeric) {
-    return { slug: `${scope}-${detail.providerId}` };
-  }
-  const base = slugify(title) || 'title';
+export function buildSlug(detail: TitleDetail, title: string, providerKey: string): { slug: string } {
+  const base = slugify(title) || slugify(detail.titleEn ?? '') || 'title';
   return { slug: `${base}-${shortHash(`${providerKey}:${detail.providerId}`)}` };
 }
 

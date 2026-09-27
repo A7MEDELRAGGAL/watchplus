@@ -38,8 +38,10 @@ async function claimSlug(
  *
  * Wholesale replacement is deliberate: the source is authoritative for the rows
  * it owns, and delete-then-insert is what stops stale episodes from lingering
- * after a source renumbers them. Everything happens inside one transaction, so
- * a failure part-way leaves the previous season set intact.
+ * after a source renumbers them.
+ *
+ * Not atomic as a whole — see the note at the writes below. Each step is
+ * individually atomic, and a re-run repairs anything a crash left behind.
  *
  * The upsert is keyed on `key` (provider:providerId), so two providers scraping
  * the same film produce two rows; the merge step is what decides they are one
@@ -85,66 +87,83 @@ export async function upsertTitle(
     searchBlob: data.searchBlob,
   };
 
-  const titleId = await prisma.$transaction(async (tx) => {
-    const title = existing
-      ? await tx.title.update({
-          where: { key: data.key },
-          data: { ...scalars, releaseYear: data.releaseYear ?? undefined },
-        })
-      : await tx.title.create({
-          data: {
-            key: data.key,
-            type: data.type,
-            slug: await claimSlug(tx, data.slug, provider.key, providerId),
-            ...scalars,
-            releaseYear: data.releaseYear,
-            status: 'PUBLISHED',
-            publishedAt: new Date(),
-          },
-        });
+  /*
+   * Deliberately NOT wrapped in one interactive transaction.
+   *
+   * A callback transaction holds a single session open for its whole duration,
+   * and a 3-season anime is ~70 queries — over a minute on a cold connection.
+   * Neon's pooler (and any transaction-mode proxy) is entitled to hand that
+   * connection to another session meanwhile, and when it does Postgres reports
+   * the transaction as closed: "Transaction not found ... obtained before
+   * disconnecting". That is not hypothetical, it is what the first Postgres run
+   * produced: 41 titles in, 7 items lost to it.
+   *
+   * So every step below is atomic on its own, using the unique key as the
+   * conflict target:
+   *   - title.upsert on `key`         → one statement, always leaves one row
+   *   - titleSource.upsert            → one statement
+   *   - season delete + re-insert     → idempotent, and a re-run repairs it
+   *
+   * A crash midway leaves a title whose seasons are missing rather than a
+   * half-written catalogue, and the next run fills it in. Given the pipeline is
+   * incremental and re-runs every 6 hours, that is the right trade.
+   */
+  const title = existing
+    ? await prisma.title.update({
+        where: { key: data.key },
+        data: { ...scalars, releaseYear: data.releaseYear ?? undefined },
+      })
+    : await prisma.title.create({
+        data: {
+          key: data.key,
+          type: data.type,
+          slug: await claimSlug(prisma, data.slug, provider.key, providerId),
+          ...scalars,
+          releaseYear: data.releaseYear,
+          status: 'PUBLISHED',
+          publishedAt: new Date(),
+        },
+      });
 
-    await tx.titleSource.upsert({
-      where: { provider_providerId: { provider: provider.key, providerId } },
-      create: {
-        titleId: title.id,
-        provider: provider.key,
-        providerId,
-        url: data.sourceUrl,
-        lastSyncedAt: new Date(),
-      },
-      update: { url: data.sourceUrl, lastSyncedAt: new Date(), isDead: false },
-    });
-
-    // A movie has no seasons, but the player needs somewhere to hang its links.
-    // Season 0 / episode 1 gives it a home and keeps the player code uniform.
-    const seasons: NormalizedSeason[] =
-      data.movieStreams.length > 0
-        ? [
-            {
-              number: 0,
-              name: 'Full movie',
-              overview: null,
-              posterUrl: null,
-              airDate: null,
-              episodes: [movieAsEpisode(data)],
-            },
-          ]
-        : data.seasons;
-
-    if (seasons.length) {
-      await tx.season.deleteMany({ where: { titleId: title.id } });
-      for (const season of seasons) {
-        await writeSeason(tx, title.id, season, provider);
-      }
-    }
-
-    return title.id;
+  await prisma.titleSource.upsert({
+    where: { provider_providerId: { provider: provider.key, providerId } },
+    create: {
+      titleId: title.id,
+      provider: provider.key,
+      providerId,
+      url: data.sourceUrl,
+      lastSyncedAt: new Date(),
+    },
+    update: { url: data.sourceUrl, lastSyncedAt: new Date(), isDead: false },
   });
+
+  // A movie has no seasons, but the player needs somewhere to hang its links.
+  // Season 0 / episode 1 gives it a home and keeps the player code uniform.
+  const seasons: NormalizedSeason[] =
+    data.movieStreams.length > 0
+      ? [
+          {
+            number: 0,
+            name: 'Full movie',
+            overview: null,
+            posterUrl: null,
+            airDate: null,
+            episodes: [movieAsEpisode(data)],
+          },
+        ]
+      : data.seasons;
+
+  if (seasons.length) {
+    await prisma.season.deleteMany({ where: { titleId: title.id } });
+    for (const season of seasons) {
+      await writeSeason(prisma, title.id, season, provider);
+    }
+  }
 
   if (existing) stats.updated += 1;
   else stats.created += 1;
 
-  return titleId;
+  return title.id;
 }
 
 function movieAsEpisode(data: NormalizedTitle): NormalizedEpisode {
@@ -160,13 +179,16 @@ function movieAsEpisode(data: NormalizedTitle): NormalizedEpisode {
   };
 }
 
-async function writeSeason(
-  tx: Prisma.TransactionClient,
-  titleId: string,
-  season: NormalizedSeason,
-  provider: Provider,
-) {
-  const created = await tx.season.create({
+/**
+ * Anything that can run these queries: the plain client, or a transaction
+ * client. The writes are no longer wrapped in a transaction, so this is the
+ * plain `prisma` in practice, but keeping the union means a future caller can
+ * still opt into one without touching these functions.
+ */
+type Db = Prisma.TransactionClient | typeof prisma;
+
+async function writeSeason(db: Db, titleId: string, season: NormalizedSeason, provider: Provider) {
+  const created = await db.season.create({
     data: {
       titleId,
       number: season.number,
@@ -178,17 +200,17 @@ async function writeSeason(
   });
 
   for (const episode of season.episodes) {
-    await writeEpisode(tx, created.id, episode, provider);
+    await writeEpisode(db, created.id, episode, provider);
   }
 }
 
 async function writeEpisode(
-  tx: Prisma.TransactionClient,
+  db: Db,
   seasonId: string,
   episode: NormalizedEpisode,
   provider: Provider,
 ) {
-  const created = await tx.episode.create({
+  const created = await db.episode.create({
     data: {
       seasonId,
       number: episode.number,
@@ -205,7 +227,7 @@ async function writeEpisode(
     const providerKey = stream.provider || provider.key;
     const providerId = stream.providerId || `${providerKey}-${episode.number}`;
 
-    await tx.episodeSource.upsert({
+    await db.episodeSource.upsert({
       where: {
         episodeId_provider_providerId: {
           episodeId: created.id,
