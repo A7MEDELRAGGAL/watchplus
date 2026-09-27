@@ -1,0 +1,86 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# The scraper's only trigger.
+#
+# Why not a Vercel cron? The free Hobby plan fires crons once per day and caps
+# every function at 300s, which is not enough to walk a catalogue. A scheduled
+# workflow has no such ceiling and costs nothing on a public repo.
+#
+# Setup (once, in the repo's Settings -> Secrets -> Actions):
+#   DATABASE_URL     Neon pooled connection string
+#   AUTH_SECRET      openssl rand -base64 32
+#   TMDB_API_KEY     optional, only if you crawl TMDB
+#   SOURCES_JSON     optional, for the generic HTML providers
+# ─────────────────────────────────────────────────────────────────────────────
+name: scrape
+
+on:
+  schedule:
+    # 03:11 UTC every 6 hours. Deliberately not on the hour: the top of the hour
+    # is the single most contended slot on GitHub's scheduler.
+    - cron: '11 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      pages:
+        description: 'Listing pages per provider'
+        required: false
+        default: '3'
+      provider:
+        description: 'Single provider key, or blank for all'
+        required: false
+
+concurrency:
+  # Never let two crawls overlap; a second run mid-crawl just re-imports
+  # work the first one is still doing.
+  group: scrape
+  cancel-in-progress: false
+
+jobs:
+  crawl:
+    # Nightly and the weekend are the busiest windows; allow a manual retry.
+    if: github.repository_owner == 'A7MEDELRAGGAL' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Matches .nvmrc / engines in package.json. 20 is the current LTS and
+          # is what Vercel uses too, so local and CI behave the same.
+          node-version: '20'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Create tables if missing
+        # `db push` rather than `migrate deploy` because the project has no
+        # migration history yet. Once schema changes start shipping regularly,
+        # switch this to `npx prisma migrate deploy` and commit the migrations.
+        #
+        # This step must use the DIRECT url, not the pooled one: the pooler sits
+        # in front of a transaction proxy that cannot serve the long-lived
+        # session Prisma's schema engine needs.
+        env:
+          DATABASE_URL: ${{ secrets.DIRECT_DATABASE_URL || secrets.DATABASE_URL }}
+        run: npx prisma db push --skip-generate
+
+      - name: Crawl
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
+          TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+          SOURCES_JSON: ${{ secrets.SOURCES_JSON }}
+          SCRAPER_PROVIDERS: ${{ secrets.SCRAPER_PROVIDERS }}
+          SCRAPER_MAX_PAGES: ${{ inputs.pages || secrets.SCRAPER_MAX_PAGES || '3' }}
+          SCRAPER_VERBOSE: '1'
+        run: |
+          if [ -n "${{ inputs.provider }}" ]; then
+            npx tsx scripts/scrape.ts "${{ inputs.provider }}" --pages "${SCRAPER_MAX_PAGES}"
+          else
+            npx tsx scripts/scrape.ts --pages "${SCRAPER_MAX_PAGES}"
+          fi

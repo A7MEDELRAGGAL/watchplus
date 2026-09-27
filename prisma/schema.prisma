@@ -1,0 +1,308 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// Postgres is the one and only datasource. Deployment target is the free Neon
+// tier, and the free *dev branch* of that same database serves local work, so
+// there is exactly one schema and no chance of prod drifting from local.
+//
+// Neon's pooled connection string ends in `?sslmode=require`; use the
+// `-pooler` hostname for the app and the direct host for migrations.
+// See docs/DEPLOY.md.
+//
+// The SQLite connector supports neither `enum` nor `Json`, so both are modelled
+// as constrained text: TITLE_TYPES / TITLE_STATUSES in @/lib/constants, and
+// JSON text via @/lib/db-json. This keeps the queries identical on either
+// engine and readable without a migration. Nothing in this app queries *inside*
+// the JSON blobs — the searchable copy lives in Title.searchBlob.
+// ─────────────────────────────────────────────────────────────────────────────
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id        String   @id @default(cuid())
+  username  String   @unique
+  password  String
+  isAdmin   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  favorites Favorite[]
+  watchlist Watchlist[]
+  history   WatchHistory[]
+  progress  PlayProgress[]
+}
+
+model Title {
+  id            String  @id @default(cuid())
+  /// Stable dedupe key, e.g. "tmdb:550" / "anilist:21" / "custom:inception"
+  key           String  @unique
+  type          String
+  slug          String  @unique
+  /// Primary (original) title, kept untouched for sorting and matching
+  originalTitle String
+  /// Arabic title when a source provides one
+  titleAr       String?
+  titleEn       String?
+  overview      String?
+  /// Tagline / summary sentence shown on the hero
+  tagline       String?
+
+  posterUrl   String?
+  backdropUrl String?
+  /// Absolute URL on the origin site, kept for provenance
+  sourceUrl   String?
+
+  releaseDate DateTime?
+  /// Year as a number for cheap filtering without parsing dates
+  releaseYear Int?
+  runtimeMin  Int?
+  status      String    @default("DRAFT")
+  /// e.g. "Ended", "Continuing", "Upcoming"
+  showStatus  String?
+
+  /// JSON text: [{ name, character, imageUrl }]
+  cast      String?
+  /// JSON text: [{ id, name, slug }]
+  genres    String?
+  /// JSON text: [{ id, name, slug }]
+  studios   String?
+  /// JSON text: [{ iso_639_1, iso_3166_1, name }]
+  countries String?
+  /// JSON text: arbitrary source-specific extras
+  extra     String?
+
+  /// Aggregated across every enabled provider
+  rating     Float?
+  votesCount Int?
+  popularity Float  @default(0)
+  views      Int    @default(0)
+
+  // ── anime / series relations ──────────────────────────────────────────────
+  totalSeasons  Int?
+  totalEpisodes Int?
+  /// Highest episode number across all seasons
+  latestEpisode Int?
+  nextEpisodeAt DateTime?
+  /// Anime: is this an ongoing show that should be re-checked on every run
+  isOngoing     Boolean   @default(false)
+  /// Ranking score on the origin site, 1..10
+  siteRank      Float?
+
+  // ── search / dedupe ───────────────────────────────────────────────────────
+  /// Lowercased haystack: titles + overview + genres + cast, for LIKE/FTS search
+  searchBlob String?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  publishedAt DateTime?
+
+  sources   TitleSource[]
+  seasons   Season[]
+  favorites Favorite[]
+  watchlist Watchlist[]
+  history   WatchHistory[]
+
+  @@index([type, status])
+  @@index([type, popularity])
+  @@index([releaseYear])
+  @@index([totalSeasons])
+  @@index([searchBlob])
+  @@index([updatedAt])
+}
+
+model Season {
+  id        String    @id @default(cuid())
+  titleId   String
+  number    Int
+  name      String?
+  overview  String?
+  posterUrl String?
+  /// Season-level banner for the "season picker" row
+  airDate   DateTime?
+
+  title    Title     @relation(fields: [titleId], references: [id], onDelete: Cascade)
+  episodes Episode[]
+
+  @@unique([titleId, number])
+  @@index([titleId])
+}
+
+model Episode {
+  id        String    @id @default(cuid())
+  seasonId  String
+  number    Int
+  name      String?
+  overview  String?
+  stillUrl  String?
+  /// runtime in minutes
+  runtime   Int?
+  airDate   DateTime?
+  /// total runtime across every source for this episode, seconds
+  durationS Int?
+
+  season   Season          @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  sources  EpisodeSource[]
+  progress PlayProgress[]
+
+  @@unique([seasonId, number])
+  @@index([seasonId])
+}
+
+/// One (source site, item) pair. A title can exist on several sites, and a
+/// title can have many playable links per source. Keeping sources separate is
+/// what lets the site keep working when one origin goes down.
+model TitleSource {
+  id           String   @id @default(cuid())
+  titleId      String
+  /// provider key, e.g. "tmdb", "anilist", "mysite"
+  provider     String
+  /// id of the item on that provider
+  providerId   String
+  url          String
+  /// provider-reported quality: "1080p" | "720p" | ...
+  quality      String?
+  /// language tag for this particular link
+  language     String   @default("ar")
+  /// provider-reported release year, used to detect mismatched matches
+  year         Int?
+  /// extra payload from the provider (raw json when available)
+  raw          String?
+  lastSyncedAt DateTime @default(now())
+  isDead       Boolean  @default(false)
+
+  title Title @relation(fields: [titleId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerId])
+  @@index([titleId])
+  @@index([provider, isDead])
+}
+
+/// A resolved, playable link for one episode (or the whole movie).
+model EpisodeSource {
+  id           String   @id @default(cuid())
+  episodeId    String
+  provider     String
+  providerId   String
+  /// Page on the origin site that contains the player / embed
+  url          String
+  /// Extracted direct stream: .m3u8 / .mp4
+  streamUrl    String?
+  /// "hls" | "mp4" | "iframe" | "dash"
+  kind         String   @default("iframe")
+  quality      String?
+  language     String   @default("ar")
+  headers      String?
+  isDead       Boolean  @default(false)
+  lastSyncedAt DateTime @default(now())
+
+  episode Episode @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+
+  @@unique([episodeId, provider, providerId])
+  @@index([episodeId])
+}
+
+// ── user state ───────────────────────────────────────────────────────────────
+
+model Favorite {
+  id        String   @id @default(cuid())
+  userId    String
+  titleId   String
+  createdAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title Title @relation(fields: [titleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, titleId])
+  @@index([userId, createdAt])
+}
+
+model Watchlist {
+  id        String   @id @default(cuid())
+  userId    String
+  titleId   String
+  createdAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title Title @relation(fields: [titleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, titleId])
+  @@index([userId, createdAt])
+}
+
+model WatchHistory {
+  id        String   @id @default(cuid())
+  userId    String
+  titleId   String
+  episodeId String?
+  seconds   Int      @default(0)
+  completed Boolean  @default(false)
+  watchedAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title Title @relation(fields: [titleId], references: [id], onDelete: Cascade)
+
+  @@index([userId, watchedAt])
+}
+
+model PlayProgress {
+  id        String   @id @default(cuid())
+  userId    String
+  episodeId String
+  seconds   Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  episode Episode @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, episodeId])
+}
+
+// ── scraper bookkeeping ──────────────────────────────────────────────────────
+
+/// One per registered provider, so the admin UI can show health at a glance.
+model Source {
+  id             String    @id @default(cuid())
+  /// matches the provider key
+  key            String    @unique
+  name           String
+  /// "api" | "html" | "rss"
+  kind           String
+  baseUrl        String
+  enabled        Boolean   @default(true)
+  priority       Int       @default(100)
+  lastRunAt      DateTime?
+  lastStatus     String?
+  lastDurationMs Int?
+  itemsFound     Int       @default(0)
+  itemsImported  Int       @default(0)
+  errorCount     Int       @default(0)
+  note           String?
+
+  runs ScrapeRun[]
+}
+
+model ScrapeRun {
+  id           String    @id @default(cuid())
+  sourceId     String?
+  trigger      String    @default("manual")
+  status       String    @default("running")
+  startedAt    DateTime  @default(now())
+  finishedAt   DateTime?
+  pagesFetched Int       @default(0)
+  found        Int       @default(0)
+  imported     Int       @default(0)
+  updated      Int       @default(0)
+  skipped      Int       @default(0)
+  errors       Int       @default(0)
+  message      String?
+  /// JSON text: [{ url, ok, ms, error }]
+  log          String?
+
+  source Source? @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+
+  @@index([startedAt])
+}
