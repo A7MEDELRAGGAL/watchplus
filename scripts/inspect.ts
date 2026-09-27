@@ -39,6 +39,7 @@ async function main() {
       seasons: {
         select: {
           number: true,
+          name: true,
           _count: { select: { episodes: true } },
           episodes: { take: 2, select: { number: true, name: true, airDate: true } },
         },
@@ -59,8 +60,10 @@ async function main() {
     console.log(`      seasons   ${t.seasons.length}   episodes ${eps}`);
     for (const s of t.seasons) {
       const first = s.episodes[0];
+      // AniList and Jikan have no season granularity, so they flatten the show
+      // into one season named "All episodes" rather than faking "Season 1".
       console.log(
-        `        S${s.number}: ${s._count.episodes} eps` +
+        `        #${s.number} "${s.name ?? '—'}": ${s._count.episodes} eps` +
           (first ? `  (E${first.number} "${first.name ?? '—'}" ${first.airDate ?? ''})` : ''),
       );
     }
