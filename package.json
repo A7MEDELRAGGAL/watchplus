@@ -18,6 +18,7 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:inspect": "tsx scripts/inspect.ts",
     "db:slugs": "tsx scripts/fix-slugs.ts",
+    "secrets:rotate": "tsx scripts/rotate-secrets.ts",
     "scrape": "tsx scripts/scrape.ts",
     "scrape:dry": "tsx scripts/scrape.ts --dry",
     "probe": "tsx scripts/probe.ts",

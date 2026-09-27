@@ -11,8 +11,12 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
+# Any .env variant, including backups and rotated copies. `.env` alone is not
+# enough: `secrets:rotate` writes .env.bak-* beside it, and a backup holding a
+# superseded-but-still-valid secret is exactly the file that must not be pushed.
 .env
-.env*.local
+.env*
+!.env.example
 
 .vercel
 *.tsbuildinfo
