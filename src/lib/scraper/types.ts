@@ -71,7 +71,7 @@ export interface StreamLink {
   url: string;
   /** absolute direct stream when the provider exposes one */
   streamUrl?: string;
-  kind: 'hls' | 'mp4' | 'iframe' | 'dash' | 'unknown';
+  kind: 'hls' | 'mp4' | 'iframe' | 'dash' | 'page' | 'unknown';
   /** human label for this mirror as the origin names it, e.g. "Mega" */
   name?: string;
   quality?: string;

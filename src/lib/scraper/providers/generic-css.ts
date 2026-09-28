@@ -95,6 +95,13 @@ const StreamConfigSchema = z.object({
     .optional(),
   /** pull the stream out of an inline script blob instead of an attribute */
   inlinePattern: z.string().optional(),
+  /**
+   * Force the link type instead of auto-detection. Auto classifies media
+   * URLs (m3u8/mpd/mp4) and treats everything else as an embeddable iframe;
+   * use "page" when the link is a redirect page on the origin that must be
+   * opened externally, not embedded.
+   */
+  kind: z.enum(['hls', 'mp4', 'iframe', 'dash', 'page', 'unknown']).optional(),
   /** base to resolve relative hrefs against; defaults to the page url */
   base: z.string().optional(),
 });
@@ -644,6 +651,7 @@ type StreamConfigLike = {
   attr: string;
   name?: { selector?: string; attr?: string };
   inlinePattern?: string;
+  kind?: StreamLink['kind'];
   base?: string;
 };
 
@@ -685,6 +693,10 @@ function readStreams(
       if (!raw) return;
       const link = detectStream(raw, spec.base ?? pageUrl);
       if (!link) return;
+
+      // A config-declared kind wins over auto-detection: the operator knows
+      // whether that href is an embed, a redirect page, or a media file.
+      if (spec.kind) link.kind = spec.kind;
 
       // The origin's own label for this mirror when the markup exposes one;
       // otherwise a stable positional fallback so N mirrors never render as

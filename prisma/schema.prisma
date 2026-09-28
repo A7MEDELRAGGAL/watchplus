@@ -191,7 +191,7 @@ model EpisodeSource {
   url          String
   /// Extracted direct stream: .m3u8 / .mp4
   streamUrl    String?
-  /// "hls" | "mp4" | "iframe" | "dash"
+  /// "hls" | "mp4" | "iframe" | "dash" | "page"
   kind         String   @default("iframe")
   /// Human label for this mirror as the origin names it ("Mega", "سيرفر 1").
   /// Falls back to `provider` in the UI when null.
