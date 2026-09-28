@@ -62,11 +62,11 @@ jobs:
         # migration history yet. Once schema changes start shipping regularly,
         # switch this to `npx prisma migrate deploy` and commit the migrations.
         #
-        # This step must use the DIRECT url, not the pooled one: the pooler sits
-        # in front of a transaction proxy that cannot serve the long-lived
-        # session Prisma's schema engine needs.
+        # The pooled endpoint is fine here. An earlier version routed this step
+        # at a direct url on the theory that Prisma's schema engine needs a
+        # long-lived session; it does not, `db push` completes over the pooler.
         env:
-          DATABASE_URL: ${{ secrets.DIRECT_DATABASE_URL || secrets.DATABASE_URL }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: npx prisma db push --skip-generate
 
       - name: Crawl
