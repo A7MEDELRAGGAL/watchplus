@@ -142,6 +142,11 @@ page** too, since that is where the overview, genres and episode list come from.
 
 ### 3. Review, enable, and test on a small run
 
+Paste the array into `sources.config.json` at the repo root — every run reads
+that file. The `SOURCES_JSON` env var also works (handy on Vercel/GitHub
+Actions, where there is no file to edit); env entries are merged on top of the
+file, so the two can be used together.
+
 ```json
 [
   {

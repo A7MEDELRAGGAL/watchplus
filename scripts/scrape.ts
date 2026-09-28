@@ -79,7 +79,7 @@ async function main() {
     : registry.selectedProviders();
 
   if (!providers.length) {
-    console.error('  No usable providers. Set TMDB_API_KEY, or declare a source in SOURCES_JSON.');
+    console.error('  No usable providers. Set TMDB_API_KEY, or declare a source in sources.config.json (or SOURCES_JSON).');
     process.exit(1);
   }
 
