@@ -76,6 +76,8 @@ export interface NormalizedStream {
   url: string;
   streamUrl: string | null;
   kind: string;
+  /** human label for this mirror as the origin names it */
+  name: string | null;
   quality: string | null;
   language: string;
   headers: Record<string, string> | null;
@@ -174,6 +176,7 @@ function normalizeStream(s: import('./types').StreamLink, fallbackProvider: stri
     url: s.url,
     streamUrl: s.streamUrl ?? null,
     kind: s.kind,
+    name: s.name?.trim() || null,
     quality: s.quality ?? null,
     language: s.language ?? 'ar',
     headers: s.headers ?? null,

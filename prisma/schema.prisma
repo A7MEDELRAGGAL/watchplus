@@ -193,6 +193,9 @@ model EpisodeSource {
   streamUrl    String?
   /// "hls" | "mp4" | "iframe" | "dash"
   kind         String   @default("iframe")
+  /// Human label for this mirror as the origin names it ("Mega", "سيرفر 1").
+  /// Falls back to `provider` in the UI when null.
+  name         String?
   quality      String?
   language     String   @default("ar")
   headers      String?

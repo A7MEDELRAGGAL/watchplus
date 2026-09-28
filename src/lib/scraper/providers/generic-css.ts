@@ -1,4 +1,4 @@
-import { z } from 'zod';
+﻿import { z } from 'zod';
 import {
   absolute,
   asNumber,
@@ -39,7 +39,7 @@ import type {
  * Config-driven HTML scraper.
  *
  * Point it at any site with a list of CSS selectors and it becomes a first-class
- * provider. Nothing here is hardcoded to a single origin — this is the file you
+ * provider. Nothing here is hardcoded to a single origin â€” this is the file you
  * edit when you name the site you want scraped.
  *
  * Every selector is optional. Whatever you leave blank falls back to JSON-LD,
@@ -47,7 +47,7 @@ import type {
  * `{ list: { url, item } }`.
  */
 
-// ── schema ───────────────────────────────────────────────────────────────────
+// â”€â”€ schema â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /** Where to read one field. `attr` pulls an attribute, otherwise element text. */
 const FieldSchema = z.object({
@@ -86,6 +86,13 @@ const StreamConfigSchema = z.object({
   /** element carrying the playable link */
   selector: z.string(),
   attr: z.string().default('href'),
+  /** where to read the mirror's human label ("Mega", "Ø³ÙŠØ±ÙØ± 1") */
+  name: z
+    .object({
+      selector: z.string().optional(),
+      attr: z.string().optional(),
+    })
+    .optional(),
   /** pull the stream out of an inline script blob instead of an attribute */
   inlinePattern: z.string().optional(),
   /** base to resolve relative hrefs against; defaults to the page url */
@@ -151,7 +158,7 @@ export const SourceConfigSchema = z.object({
 
 export type SourceConfig = z.infer<typeof SourceConfigSchema>;
 
-// ── config loading ───────────────────────────────────────────────────────────
+// â”€â”€ config loading â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /**
  * Lazy requires for the config-file loader. The scraper runs under tsx (CLI)
@@ -159,12 +166,12 @@ export type SourceConfig = z.infer<typeof SourceConfigSchema>;
  * a lazy require keeps this module importable from edge-style bundles that do not.
  */
 function requireFs(): typeof import('fs') {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  // eslint-disable-next-line
   return require('fs') as typeof import('fs');
 }
 
 function requirePath(): typeof import('path') {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  // eslint-disable-next-line
   return require('path') as typeof import('path');
 }
 
@@ -196,7 +203,7 @@ export function loadSourceConfigs(): SourceConfig[] {
       if (Array.isArray(parsed)) raw.push(...parsed);
       else console.warn('[generic-css] SOURCES_JSON must be a JSON array');
     } catch {
-      console.warn('[generic-css] SOURCES_JSON is not valid JSON — ignoring');
+      console.warn('[generic-css] SOURCES_JSON is not valid JSON â€” ignoring');
     }
   }
 
@@ -214,7 +221,7 @@ export function loadSourceConfigs(): SourceConfig[] {
     .filter((c): c is SourceConfig => c !== null);
 }
 
-// ── provider factory ─────────────────────────────────────────────────────────
+// â”€â”€ provider factory â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export function createProvider(config: SourceConfig): Provider {
   return {
@@ -254,7 +261,7 @@ export function createProvider(config: SourceConfig): Provider {
     async fetchDetail(ctx, providerId, url): Promise<TitleDetail | null> {
       if (!url) {
         // an HTML source addresses items by page url, so a bare id cannot be
-        // resolved — the caller must have discovered it first
+        // resolved â€” the caller must have discovered it first
         ctx.logger.warn(`[${config.id}] no page url for "${providerId}"; skipping`);
         return null;
       }
@@ -286,7 +293,7 @@ export function createProvider(config: SourceConfig): Provider {
         genres: custom.genres?.length ? custom.genres : (structured?.genres ?? []),
         cast: custom.cast?.length ? custom.cast : (structured?.cast ?? []),
         studios: structured?.studios ?? [],
-        isOngoing: /airing|ongoing|يعرض|حالي/i.test(custom.showStatus ?? ''),
+        isOngoing: /airing|ongoing|ÙŠØ¹Ø±Ø¶|Ø­Ø§Ù„ÙŠ/i.test(custom.showStatus ?? ''),
         totalSeasons: seasons.length || structured?.totalSeasons,
         totalEpisodes:
           seasons.reduce((n, s) => n + s.episodes.length, 0) || structured?.totalEpisodes,
@@ -315,7 +322,7 @@ export function createProvider(config: SourceConfig): Provider {
   };
 }
 
-// ── urls + headers ───────────────────────────────────────────────────────────
+// â”€â”€ urls + headers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function buildListUrl(config: SourceConfig, page: number, query?: string): string {
   const raw = config.list?.url ?? '';
@@ -357,7 +364,7 @@ async function fetchPage(
   }
 
   if (!(await isAllowed(url))) {
-    throw new Error(`robots.txt disallows ${url} — refusing to fetch`);
+    throw new Error(`robots.txt disallows ${url} â€” refusing to fetch`);
   }
 
   const delay = await crawlDelay(url);
@@ -366,7 +373,7 @@ async function fetchPage(
   return fetchText(url, { signal: ctx.signal, limiter: ctx.limiter, headers: requestHeaders(config) });
 }
 
-// ── list page ────────────────────────────────────────────────────────────────
+// â”€â”€ list page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function parseListItem(
   $: Doc,
@@ -406,7 +413,7 @@ function parseListItem(
   };
 }
 
-// ── field helpers ────────────────────────────────────────────────────────────
+// â”€â”€ field helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /**
  * Locate the element a field points at, optionally the nth match.
@@ -443,7 +450,7 @@ function fieldImage($: Doc, field: FieldConfig, base: string, root?: Node): stri
   return imageSrc($, node, base) || undefined;
 }
 
-// ── detail page: selectors ───────────────────────────────────────────────────
+// â”€â”€ detail page: selectors â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 interface CustomDetail {
   originalTitle?: string;
@@ -511,7 +518,7 @@ function readDetailFields($: Doc, config: SourceConfig, pageUrl: string): Custom
   return out;
 }
 
-// ── detail page: JSON-LD ─────────────────────────────────────────────────────
+// â”€â”€ detail page: JSON-LD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 interface StructuredDetail extends CustomDetail {
   votesCount?: number;
@@ -589,7 +596,7 @@ function readJsonLd($: Doc): StructuredDetail {
   return out;
 }
 
-// ── episodes + streams ───────────────────────────────────────────────────────
+// â”€â”€ episodes + streams â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function readSeasons($: Doc, config: SourceConfig, pageUrl: string): SeasonDetail[] {
   const seasons: SeasonDetail[] = [];
@@ -635,6 +642,7 @@ function readSeasons($: Doc, config: SourceConfig, pageUrl: string): SeasonDetai
 type StreamConfigLike = {
   selector: string;
   attr: string;
+  name?: { selector?: string; attr?: string };
   inlinePattern?: string;
   base?: string;
 };
@@ -676,7 +684,13 @@ function readStreams(
 
       if (!raw) return;
       const link = detectStream(raw, spec.base ?? pageUrl);
-      if (link) out.push({ ...link, language: 'ar' });
+      if (!link) return;
+
+      // The origin's own label for this mirror when the markup exposes one;
+      // otherwise a stable positional fallback so N mirrors never render as
+      // N identical buttons.
+      const named = spec.name ? readStreamName($, node.get(0) as Node, spec.name) : '';
+      out.push({ ...link, name: named || `Ø³ÙŠØ±ÙØ± ${out.length + 1}`, language: 'ar' });
     });
   }
 
@@ -690,6 +704,21 @@ function readStreams(
   });
 }
 
+/**
+ * Read a mirror's human label. `selector` looks inside the link element,
+ * `attr` reads an attribute off it, and with neither the element's own text
+ * is used. Empty string means "the page did not name it".
+ */
+function readStreamName(
+  $: Doc,
+  node: Node,
+  name: { selector?: string; attr?: string },
+): string {
+  if (name.selector) return text($, name.selector, node);
+  if (name.attr) return clean($(node).attr(name.attr) ?? '');
+  return clean($(node).text());
+}
+
 function readMovieStreams($: Doc, config: SourceConfig, pageUrl: string): StreamLink[] {
   const spec = config.episodes[0];
   if (!spec) return [];
@@ -698,7 +727,7 @@ function readMovieStreams($: Doc, config: SourceConfig, pageUrl: string): Stream
   return readStreams($, specs, undefined, pageUrl);
 }
 
-// ── misc ─────────────────────────────────────────────────────────────────────
+// â”€â”€ misc â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function dedupeGenres(names: string[]): Genre[] {
   const seen = new Set<string>();

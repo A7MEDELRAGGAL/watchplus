@@ -5,6 +5,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 export interface PlayableSource {
   id: string;
   provider: string;
+  /** human label for this mirror, falls back to `provider` */
+  name?: string | null;
   url: string;
   streamUrl: string | null;
   kind: string;
@@ -228,7 +230,7 @@ export function VideoPlayer({
                   : 'rounded-lg border border-ink-200 px-3 py-1.5 text-xs font-medium text-ink-600 transition hover:bg-ink-100 dark:border-ink-700 dark:text-ink-300 dark:hover:bg-ink-800'
               }
             >
-              {s.provider}
+              {s.name || s.provider}
               {s.quality ? ` · ${s.quality}` : ''}
             </button>
           ))}

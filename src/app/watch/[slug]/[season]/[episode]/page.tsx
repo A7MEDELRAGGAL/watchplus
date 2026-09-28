@@ -100,6 +100,7 @@ export default async function WatchPage({ params }: { params: Params }) {
           sources={episode.sources.map((s) => ({
             id: s.id,
             provider: s.provider,
+            name: s.name,
             url: s.url,
             streamUrl: s.streamUrl,
             kind: s.kind,

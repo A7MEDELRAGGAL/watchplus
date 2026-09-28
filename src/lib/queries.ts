@@ -237,6 +237,7 @@ export async function getTitleBySlug(slug: string) {
                 select: {
                   id: true,
                   provider: true,
+                  name: true,
                   url: true,
                   streamUrl: true,
                   kind: true,
