@@ -1,0 +1,34 @@
+[
+  {
+    "id": "example",
+    "name": "Example Site (disabled template)",
+    "baseUrl": "https://example.com",
+    "type": "MOVIE",
+    "enabled": false,
+    "priority": 200,
+    "list": {
+      "url": "https://example.com/browse?page={page}",
+      "item": "div.card",
+      "title": { "selector": "h2.title" },
+      "urlField": { "selector": "a", "attr": "href" },
+      "minItems": 6
+    },
+    "detail": {
+      "title": { "selector": "h1" },
+      "overview": { "selector": "div.synopsis" },
+      "poster": { "selector": "img.poster", "attr": "src" },
+      "year": { "selector": "span.year" },
+      "genres": "a.genre"
+    },
+    "episodes": [
+      {
+        "item": "div.episode",
+        "season": 1,
+        "number": { "selector": "span.n" },
+        "title": { "selector": "span.t" },
+        "stream": { "selector": "a.play", "attr": "href" }
+      }
+    ],
+    "note": "Template entry — copy it, point it at a real site, then set enabled: true. Check robots.txt first with: npm run robots -- <url>"
+  }
+]

@@ -154,11 +154,40 @@ export type SourceConfig = z.infer<typeof SourceConfigSchema>;
 // ── config loading ───────────────────────────────────────────────────────────
 
 /**
+ * Lazy requires for the config-file loader. The scraper runs under tsx (CLI)
+ * and inside the Next.js server, both of which have `fs`/`path` available, but
+ * a lazy require keeps this module importable from edge-style bundles that do not.
+ */
+function requireFs(): typeof import('fs') {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  return require('fs') as typeof import('fs');
+}
+
+function requirePath(): typeof import('path') {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  return require('path') as typeof import('path');
+}
+
+/**
  * Sources are declared in `sources.config.json` at the repo root, and/or inline
  * in the SOURCES_JSON env var (handy on Vercel, where there is no file to edit).
+ * Both are read; the file comes first so env entries can extend or override it.
  */
 export function loadSourceConfigs(): SourceConfig[] {
   const raw: unknown[] = [];
+
+  try {
+    const fs = requireFs();
+    const path = requirePath();
+    const file = path.join(process.cwd(), 'sources.config.json');
+    if (fs.existsSync(file)) {
+      const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+      if (Array.isArray(parsed)) raw.push(...parsed);
+      else console.warn('[generic-css] sources.config.json must be a JSON array');
+    }
+  } catch (err) {
+    console.warn(`[generic-css] failed to read sources.config.json: ${err instanceof Error ? err.message : String(err)}`);
+  }
 
   const inline = process.env.SOURCES_JSON;
   if (inline) {
