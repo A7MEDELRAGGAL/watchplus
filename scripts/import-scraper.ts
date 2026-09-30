@@ -19,8 +19,8 @@
  */
 import 'dotenv/config';
 import { prisma } from '../src/lib/db';
-import { seriesKey } from '../src/lib/queries';
-import { cleanEpisodeName } from '../src/lib/queries';
+import { mergeKey } from '../src/lib/scraper/normalize';
+import { cleanEpisodeName, seasonRank, seriesKey } from '../src/lib/queries';
 
 interface ScSeries { id: number; canonical_title: string; slug: string }
 interface ScRelease { id: number; series_id: number; kind: string; season_number: number | null; title: string }
@@ -35,6 +35,20 @@ function parseNum(v: string | null): number | null {
   if (v == null) return null;
   const m = String(v).match(/\d+/);
   return m ? Number(m[0]) : null;
+}
+
+/** إعادة محاولة للعمليات ضد تقطع الشبكة (idempotent أصلًا فآمنة). */
+async function withRetry<T>(fn: () => Promise<T>, tries = 4): Promise<T> {
+  let last: unknown;
+  for (let i = 0; i < tries; i += 1) {
+    try {
+      return await fn();
+    } catch (e) {
+      last = e;
+      await new Promise((r) => setTimeout(r, 2000 * (i + 1)));
+    }
+  }
+  throw last;
 }
 
 function normUrl(u: string | null): string | null {
@@ -58,6 +72,10 @@ function prettify(slugLike: string): string {
 
 async function main() {
   const go = process.argv.includes('--go');
+  const batchArg = process.argv.find((a) => a === '--batch');
+  const batch = batchArg ? Number(process.argv[process.argv.indexOf('--batch') + 1]) || 0 : 0;
+  const offsetArg = process.argv.find((a) => a === '--offset');
+  const offset = offsetArg ? Number(process.argv[process.argv.indexOf('--offset') + 1]) || 0 : 0;
   console.log(go ? 'MODE: apply' : 'MODE: dry run (use --go to apply)');
 
   const beforeSrc = await prisma.episodeSource.count();
@@ -67,12 +85,19 @@ async function main() {
 
   let series: ScSeries[];
   try {
-    series = (await prisma.$queryRawUnsafe(
-      'SELECT id, canonical_title, slug FROM "series" ORDER BY id')) as ScSeries[];
+    series = (await withRetry(() =>
+      prisma.$queryRawUnsafe(
+        'SELECT id, canonical_title, slug FROM "series" ORDER BY id',
+      ),
+    )) as ScSeries[];
   } catch {
-    console.log('contract tables absent — nothing to import');
+    console.log('contract tables absent/unreachable — nothing to import');
     await prisma.$disconnect();
     return;
+  }
+  if (batch > 0) {
+    series = series.slice(offset, offset + batch);
+    console.log(`batch: offset=${offset} size=${series.length}`);
   }
   const releases = (await prisma.$queryRawUnsafe(
     'SELECT id, series_id, kind, season_number, title FROM "releases"')) as ScRelease[];
@@ -99,11 +124,16 @@ async function main() {
     if (n && !urlToTitle.has(n)) urlToTitle.set(n, s.titleId);
   }
   const byKey = new Map<string, typeof myTitles>();
+  const byMerge = new Map<string, typeof myTitles>();
   for (const t of myTitles) {
     const k = seriesKey(t.originalTitle);
     const l = byKey.get(k) ?? [];
     l.push(t);
     byKey.set(k, l);
+    const m = mergeKey(t.originalTitle);
+    const l2 = byMerge.get(m) ?? [];
+    l2.push(t);
+    byMerge.set(m, l2);
   }
 
   const relBySeries = new Map<number, ScRelease[]>();
@@ -149,11 +179,14 @@ async function main() {
         if (found) return found;
       }
     }
-    // (ب) عنوان مُطبَّع وحيد
+    // (ب) عنوان مُطبَّع وحيد (seriesKey ثم mergeKey الذي يتجاهل اللواحق)
     const cands = byKey.get(seriesKey(s.canonical_title)) ?? [];
     if (cands.length === 1) return cands[0];
-    if (cands.length > 1) {
-      review.push(`series "${s.canonical_title.slice(0, 40)}": ${cands.length} title matches — review, no merge`);
+    const mkey = mergeKey(s.canonical_title);
+    const cands2 = mkey ? (byMerge.get(mkey) ?? []) : [];
+    if (cands2.length === 1) return cands2[0];
+    if (cands.length > 1 || cands2.length > 1) {
+      review.push(`series "${s.canonical_title.slice(0, 40)}": ambiguous matches — review, no merge`);
       return null;
     }
     // (ج) غائب تمامًا → minimal (مخفي من الرئيسية حتى يُثرى)
@@ -191,18 +224,21 @@ async function main() {
     const title = await getOrCreateTitle(s);
     if (!title) continue;
     for (const rel of relBySeries.get(s.id) ?? []) {
-      if (rel.kind !== 'season' || rel.season_number == null) {
+      if (rel.kind !== 'season') {
         review.push(`release "${(rel.title || '').slice(0, 40)}" kind=${rel.kind} — non-season skipped`);
         continue;
       }
-      let season = title.seasons.find((x) => x.number === rel.season_number);
+      // season_number غالبًا NULL في العقد — يُستنتج من الاسم (Season 2 → 2) وإلا 1
+      const rank = seasonRank(rel.title || '');
+      const sn = rel.season_number ?? (rank <= 20 ? rank : 1);
+      let season = title.seasons.find((x) => x.number === sn);
       if (!season) {
         if (!go) {
-          review.push(`"${title.originalTitle.slice(0, 32)}" lacks season ${rel.season_number} — would create`);
+          review.push(`"${title.originalTitle.slice(0, 32)}" lacks season ${sn} — would create`);
           continue;
         }
         season = await prisma.season.create({
-          data: { titleId: title.id, number: rel.season_number, name: `Season ${rel.season_number}` },
+          data: { titleId: title.id, number: sn, name: `Season ${sn}` },
           select: { id: true, number: true, episodes: { select: { id: true, number: true } } },
         });
         title.seasons.push(season);
@@ -211,7 +247,7 @@ async function main() {
       for (const ep of epByRel.get(rel.id) ?? []) {
         const num = parseNum(ep.episode_number);
         if (num == null || num <= 0) {
-          review.push(`ep without number in "${title.originalTitle.slice(0, 30)}" S${rel.season_number} — review`);
+          review.push(`ep without number in "${title.originalTitle.slice(0, 30)}" S${sn} — review`);
           continue;
         }
         let myEp = season.episodes.find((e) => e.number === num);
@@ -246,17 +282,19 @@ async function main() {
             lastSyncedAt: new Date(),
           };
           if (go) {
-            await prisma.episodeSource.upsert({
-              where: {
-                episodeId_provider_providerId: {
-                  episodeId: myEp.id,
-                  provider: data.provider,
-                  providerId: `sc:${srv.id}`,
+            await withRetry(() =>
+              prisma.episodeSource.upsert({
+                where: {
+                  episodeId_provider_providerId: {
+                    episodeId: myEp.id,
+                    provider: data.provider,
+                    providerId: `sc:${srv.id}`,
+                  },
                 },
-              },
-              create: { episodeId: myEp.id, providerId: `sc:${srv.id}`, ...data },
-              update: { ...data },
-            });
+                create: { episodeId: myEp.id, providerId: `sc:${srv.id}`, ...data },
+                update: { ...data },
+              }),
+            );
           }
           upserted += 1;
         }
