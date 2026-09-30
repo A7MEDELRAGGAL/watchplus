@@ -21,6 +21,8 @@
     "fix:titles": "tsx scripts/fix-junk-titles.ts",
     "merge:dups": "tsx scripts/merge-duplicates.ts",
     "fix:stills": "tsx scripts/backfill-stills.ts",
+    "fix:mojibake": "tsx scripts/fix-mojibake.ts",
+    "fix:meta": "tsx scripts/fix-meta.ts",
     "fix:backdrops": "tsx scripts/fix-backdrops.ts",
     "fix:posters": "tsx scripts/check-posters.ts",
     "secrets:rotate": "tsx scripts/rotate-secrets.ts",

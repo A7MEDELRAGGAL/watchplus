@@ -67,6 +67,27 @@ export function displayTitle(
   return raw.replace(/\s*\(\s*(مسلسل|فيلم|مدبلجة|TV)\s*\)\s*$/i, '').trim() || raw;
 }
 
+/** اسم الحلقة كما ورد، بلا تواريخ ملصقة ("الحلقة 3 - 2024/01/05" → "الحلقة 3"). */
+export function cleanEpisodeName(name: string | null, fallbackNumber: number): string {
+  const t = (name || '')
+    .replace(/\b\d{4}[-/]\d{1,2}[-/]\d{1,2}\b/g, ' ')
+    .replace(/\b\d{1,2}[-/]\d{1,2}[-/]\d{4}\b/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+    .replace(/[-–—:|/\\]+$/, '')
+    .trim();
+  return t || `Episode ${fallbackNumber}`;
+}
+
+/**
+ * رقم الموسم للعرض: صفوف CSV موسمها دائمًا "Season 1"، فإن حمل اسم العمل
+ * رقم موسم حقيقي (Season 2…) يُعرض هو — وإلا الرقم المخزن.
+ */
+export function displaySeasonNumber(originalTitle: string, stored: number): number {
+  if (stored !== 1) return stored;
+  return seasonRank(originalTitle) <= 20 ? seasonRank(originalTitle) : stored;
+}
+
 const PUBLISHED = { status: 'PUBLISHED' } as const;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -292,6 +313,7 @@ export async function getTitleBySlug(slug: string) {
         cast: true,
         countries: true,
         key: true,
+        extra: true,
         sources: {
           select: { provider: true, url: true, isDead: true, language: true },
           where: { isDead: false },
@@ -331,6 +353,14 @@ export async function getTitleBySlug(slug: string) {
     genres: fromJsonText<Genre[]>(title.genres, []),
     studios: fromJsonText<Studio[]>(title.studios, []),
     countries: fromJsonText<{ name: string }[]>(title.countries, []),
+    titleNative: (() => {
+      try {
+        const ex = JSON.parse(title.extra ?? '{}') as { titleNative?: unknown };
+        return typeof ex.titleNative === 'string' && ex.titleNative ? ex.titleNative : null;
+      } catch {
+        return null;
+      }
+    })(),
     episodeCount: episodes.length,
     playableCount: liveCount(episodes),
   };
@@ -362,6 +392,7 @@ export function seriesKey(title: string): string {
     .toLowerCase()
     .replace(/[^\p{L}\p{N}\s]/gu, ' ')
     .replace(SEASON_MARKERS, ' ')
+    .replace(/\b\d+\b/g, ' ')
     .replace(/\s{2,}/g, ' ')
     .trim();
 }

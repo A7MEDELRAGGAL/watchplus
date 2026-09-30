@@ -17,6 +17,11 @@
     scroll-behavior: smooth;
   }
 
+  /* يمنع أي تمدد أفقي يأكل المحتوى (clip لا يكسر الـ sticky header) */
+  body {
+    overflow-x: clip;
+  }
+
   body {
     @apply bg-ink-50 text-ink-900 antialiased dark:bg-ink-950 dark:text-ink-100;
     font-family: var(--font-sans);

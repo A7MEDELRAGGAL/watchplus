@@ -246,7 +246,6 @@ const JUNK_WORDS =
 
 /** علامات label-الحلقة: وجودها مع بقايا اسم يعني العنوان مختلط يحتاج تنظيفًا. */
 const EP_MARKERS = /(حلقة|الحلقة|موسم|الموسم)/;
-
 /** كلمات تُحذف عند التنظيف (أوسع من JUNK_WORDS: رتب + صيغ + جودات). */
 const CLEAN_WORDS =
   /^(انمي|anime|special|tv|ova|ona|season|episode|ep|مترجمة|مترجم|مدبلجة|مدبلج|hd|حل|الحل|حلقة|الحلقة|حلقات|موسم|الموسم|مسلسل|فيلم|خاصة|اسبشل|سبيشل|أونا|اونا|أوفا|اوفا|جزء|الجزء|الأول|الاول|الثاني|الثانى|الثالث|الرابع|الخامس|السادس|السابع|الثامن|التاسع|العاشر|العاشرة|الأخيرة|الاخيرة|كامل|كاملة|جميع|اونلاين|انمى|الأنمي|انمي)$/i;
@@ -309,6 +308,35 @@ export function titleFromUrlSlug(url: string): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * إصلاح الموجيباك: نص عربي قُرئ بترميز خاطئ ("Ø§Ù„Ø­Ù„Ù‚Ø©" → "الحلقة").
+ * يعيد الأصل لو لم يتغير شيء أو بقيت آثار تلف.
+ */
+export function fixMojibake(s: string): string {
+  // eslint-disable-next-line no-misleading-character-class
+  if (!s || !/[\u00D9\u00D8\u00C3\u00C2]/.test(s)) return s;
+  try {
+    const fixed = Buffer.from(s, 'latin1').toString('utf8');
+    if (fixed !== s && !/[\u00D8\u00D9\uFFFD]/.test(fixed)) return fixed;
+  } catch {
+    /* keep original */
+  }
+  return s;
+}
+
+/** labels زائفة بعد الإصلاح (عبارات واجهة المصدر لا أسماء حلقات). */
+export function isJunkLabel(s: string): boolean {
+  const t = (s || '').trim();
+  if (!t) return true;
+  const words = t.split(/\s+/);
+  return (
+    words.length <= 4 &&
+    words.every((w) =>
+      /^(مشاهدة|وتحميل|تحميل|الآن|الان|مترجم|مترجمة|شاهد|حلقة|المشاهدة)$/.test(w),
+    )
+  );
 }
 
 function toDate(value?: string | null): Date | null {

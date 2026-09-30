@@ -40,8 +40,11 @@ export function TitleCard({
             priority={priority}
           />
         ) : (
-          <div className="grid h-full place-items-center bg-gradient-to-br from-brand-900 to-ink-900 p-3 text-center text-xs text-white">
-            {name}
+          <div className="grid h-full place-items-center overflow-hidden bg-gradient-to-br from-brand-900 via-ink-900 to-ink-950 p-3 text-center">
+            <span aria-hidden className="tabular absolute text-7xl font-black text-white/10">
+              {(name[0] || 'W').toUpperCase()}
+            </span>
+            <span className="relative text-xs font-bold text-white">{name}</span>
           </div>
         )}
 

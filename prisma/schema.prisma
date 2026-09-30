@@ -34,6 +34,7 @@ model User {
   watchlist Watchlist[]
   history   WatchHistory[]
   progress  PlayProgress[]
+  comments  EpisodeComment[]
 }
 
 model Title {
@@ -262,6 +263,20 @@ model PlayProgress {
   episode Episode @relation(fields: [episodeId], references: [id], onDelete: Cascade)
 
   @@unique([userId, episodeId])
+}
+
+/// تعليق + تقييم (1-5 نجوم، اختياري) على حلقة — للمسجلين فقط.
+model EpisodeComment {
+  id        String   @id @default(cuid())
+  episodeId String
+  userId    String
+  body      String
+  stars     Int?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([episodeId, createdAt])
 }
 
 // ── scraper bookkeeping ──────────────────────────────────────────────────────

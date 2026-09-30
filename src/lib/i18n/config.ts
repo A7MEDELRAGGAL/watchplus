@@ -128,6 +128,12 @@ const ar = {
     colSource: 'المصدر',
     colStatus: 'الحالة',
     colAction: 'تحميل',
+    comments: 'التعليقات والتقييم',
+    loginToComment: 'سجّل دخولك للتعليق وتقييم الحلقة.',
+    commentPh: 'اكتب تعليقك…',
+    commentSend: 'إرسال',
+    noComments: 'لا تعليقات بعد — كن أول من يعلّق.',
+    yourRating: 'تقييمك',
   },
 
   search: {
@@ -300,6 +306,12 @@ const en: Dict = {
     colSource: 'Source',
     colStatus: 'Status',
     colAction: 'Get',
+    comments: 'Comments & rating',
+    loginToComment: 'Sign in to comment and rate this episode.',
+    commentPh: 'Write a comment…',
+    commentSend: 'Send',
+    noComments: 'No comments yet — be the first.',
+    yourRating: 'Your rating',
   },
 
   search: {

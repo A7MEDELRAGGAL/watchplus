@@ -3,13 +3,15 @@ import { notFound, permanentRedirect } from 'next/navigation';
 import { SiteHeader } from '@/components/site-header';
 import { SiteFooter } from '@/components/site-footer';
 import { EpisodeView, type EpisodeViewServer } from '@/components/episode-view';
+import { EpisodeComments } from '@/components/episode-comments';
 import { getDictionary } from '@/lib/i18n/config';
 import { getLocale } from '@/lib/i18n/server';
 import { getSessionUser } from '@/lib/auth';
 import { displayTitle } from '@/lib/queries';
 import { prisma } from '@/lib/db';
-import { getTitleBySlug, canonicalSlug } from '@/lib/queries';
-import { classify, readFails, type ServerRow } from '@/lib/servers';
+import { getTitleBySlug, canonicalSlug, cleanEpisodeName, displaySeasonNumber } from '@/lib/queries';
+import { classify, pickDefault, readFails, type ServerRow } from '@/lib/servers';
+import { applyProbe, probeTarget } from '@/lib/server-health';
 
 export const dynamic = 'force-dynamic';
 
@@ -41,6 +43,8 @@ export default async function WatchPage({ params }: { params: Params }) {
 
   // 1) مسار التنقل: السلسلة (لينك) ← الموسم/الإصدار ← رقم الحلقة كما ورد
   const seriesName = displayTitle(title, locale);
+  const shownSeason = displaySeasonNumber(title.originalTitle, seasonNumber);
+  const shownEpisode = cleanEpisodeName(episode.name, episodeNumber);
 
   // سيرفرات الحلقة بكل الحالات + تصنيفها (active ← suspect ← expired ← dead)
   const rows: ServerRow[] = episode.sources.map((s) => ({
@@ -55,7 +59,23 @@ export default async function WatchPage({ params }: { params: Params }) {
     fails: readFails(s.headers),
     checkedAt: s.lastSyncedAt ? new Date(s.lastSyncedAt).toISOString() : null,
   }));
-  const servers: EpisodeViewServer[] = rows.map((r) => ({ ...classify(r), checkedAt: r.checkedAt }));
+  let servers: EpisodeViewServer[] = rows.map((r) => ({ ...classify(r), checkedAt: r.checkedAt }));
+
+  // فحص حي للسيرفر الافتراضي إن قدم فحصه (ساعة) — "نشط" تعني يعمل فعلًا لحظة العرض
+  try {
+    const def = pickDefault(servers);
+    const stale = !def?.checkedAt || Date.now() - new Date(def.checkedAt).getTime() > 3600_000;
+    if (def && stale) {
+      const reachable = await probeTarget(def.streamUrl || def.url);
+      const state = await applyProbe(def.id, reachable);
+      const status = (state.isDead ? 'dead' : state.fails > 0 ? 'suspect' : 'active') as EpisodeViewServer['status'];
+      servers = servers.map((s) =>
+        s.id === def.id ? { ...s, status, checkedAt: new Date().toISOString() } : s,
+      );
+    }
+  } catch {
+    /* الفحص تحسين — فشله لا يكسر الصفحة أبدًا */
+  }
 
   // سابق/تالي عبر حدود المواسم
   const ordered = title.seasons.flatMap((s) =>
@@ -97,21 +117,26 @@ export default async function WatchPage({ params }: { params: Params }) {
 
       <main className="container-page space-y-8 py-6">
         {/* 1) مسار التنقل */}
-        <nav aria-label="breadcrumb" className="flex flex-wrap items-center gap-1.5 text-sm">
-          <Link href={`/title/${title.slug}`} className="font-bold text-brand-400 hover:underline">
+        <nav aria-label="breadcrumb" className="flex min-w-0 flex-wrap items-center gap-1.5 text-sm">
+          <Link
+            href={`/title/${title.slug}`}
+            className="min-w-0 max-w-full truncate font-bold text-brand-400 hover:underline"
+          >
             {seriesName}
           </Link>
           <span aria-hidden className="text-ink-600">
             ←
           </span>
           <span className="text-ink-300">
-            {season.name || `${dict.common.seasonOf} ${seasonNumber}`}
+            {season.name && !/^season\s*1$/i.test(season.name) && season.name !== 'All episodes'
+              ? season.name
+              : `${dict.common.seasonOf} ${shownSeason}`}
           </span>
           <span aria-hidden className="text-ink-600">
             ←
           </span>
-          <span className="tabular font-bold text-white">
-            {episode.name || `${dict.common.episode} ${episodeNumber}`}
+          <span className="tabular min-w-0 truncate font-bold text-white">
+            {shownEpisode}
           </span>
         </nav>
 
@@ -197,12 +222,12 @@ export default async function WatchPage({ params }: { params: Params }) {
               const active = e.number === episodeNumber;
               const seen = watchedEpisodes.has(e.number);
               const live = e.sources.some((s) => !s.isDead);
+              const label = cleanEpisodeName(e.name, e.number);
               return (
-                <li key={e.id}>
+                <li key={e.id} title={label}>
                   <Link
                     href={`/watch/${title.slug}/${seasonNumber}/${e.number}`}
                     aria-current={active ? 'true' : undefined}
-                    title={e.name || `${dict.common.episode} ${e.number}`}
                     className={
                       active
                         ? 'tabular block rounded-xl bg-brand-600 py-3 text-center text-sm font-black text-white shadow-card'
@@ -215,6 +240,11 @@ export default async function WatchPage({ params }: { params: Params }) {
                   >
                     {e.number}
                   </Link>
+                  {e.airDate ? (
+                    <p className="tabular mt-1 truncate text-center text-[10px] text-ink-600">
+                      {new Date(e.airDate).toLocaleDateString(locale === 'ar' ? 'ar-EG' : 'en-US')}
+                    </p>
+                  ) : null}
                 </li>
               );
             })}
@@ -255,6 +285,20 @@ export default async function WatchPage({ params }: { params: Params }) {
             </p>
           </div>
         </section>
+
+        {/* 7) تعليقات وتقييم الحلقة */}
+        <EpisodeComments
+          episodeId={episode.id}
+          signedIn={Boolean(user)}
+          labels={{
+            title: dict.watch.comments,
+            loginToComment: dict.watch.loginToComment,
+            placeholder: dict.watch.commentPh,
+            send: dict.watch.commentSend,
+            noComments: dict.watch.noComments,
+            yourRating: dict.watch.yourRating,
+          }}
+        />
       </main>
 
       <SiteFooter dict={dict} />

@@ -1,6 +1,7 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { toJsonText } from '@/lib/db-json';
+import { isJunkTitle } from '../normalize';
 import type { NormalizedEpisode, NormalizedSeason, NormalizedTitle } from '../normalize';
 import type { Provider } from '../types';
 
@@ -34,6 +35,81 @@ async function claimSlug(
 }
 
 /**
+ * دمج تحديث فوق صف موجود بلا مسح: أي حقل قادم null/فارغ/زائف يُتجاهل لصالح
+ * القيمة المخزنة (صور MAL، التقييمات، النبذ، anilistId…). الـ extra يُدمج
+ * مفتاحًا بمفتاح. الأرقام (popularity/episodes/…) تؤخذ من الجديد دائمًا.
+ */
+type ExistingScalars = {
+  id: string;
+  originalTitle: string;
+  titleAr: string | null;
+  titleEn: string | null;
+  overview: string | null;
+  tagline: string | null;
+  posterUrl: string | null;
+  backdropUrl: string | null;
+  releaseDate: Date | null;
+  releaseYear: number | null;
+  runtimeMin: number | null;
+  showStatus: string | null;
+  cast: string | null;
+  genres: string | null;
+  studios: string | null;
+  countries: string | null;
+  extra: string | null;
+  rating: number | null;
+  votesCount: number | null;
+  searchBlob: string | null;
+};
+
+function mergeScalars(prev: ExistingScalars, data: NormalizedTitle) {
+  const nonEmpty = (v: unknown, fallback: string | null): string | null => {
+    if (Array.isArray(v) && v.length) return toJsonText(v) ?? fallback;
+    return fallback;
+  };
+  let extra = toJsonText(data.extra);
+  try {
+    const a = JSON.parse(prev.extra ?? '{}') as Record<string, unknown>;
+    const b = JSON.parse(toJsonText(data.extra) ?? '{}') as Record<string, unknown>;
+    extra = JSON.stringify({ ...a, ...b });
+  } catch {
+    extra = prev.extra ?? extra;
+  }
+  const titleJunk = isJunkTitle(data.originalTitle);
+  return {
+    originalTitle: titleJunk ? prev.originalTitle : data.originalTitle,
+    titleAr: data.titleAr ?? prev.titleAr,
+    titleEn: data.titleEn ?? prev.titleEn,
+    overview: data.overview ?? prev.overview,
+    tagline: data.tagline ?? prev.tagline,
+    posterUrl: data.posterUrl ?? prev.posterUrl,
+    backdropUrl: data.backdropUrl ?? prev.backdropUrl,
+    releaseDate: data.releaseDate ?? prev.releaseDate,
+    runtimeMin: data.runtimeMin ?? prev.runtimeMin,
+    showStatus: data.showStatus ?? prev.showStatus,
+    cast: nonEmpty(data.cast, prev.cast),
+    genres: nonEmpty(data.genres, prev.genres),
+    studios: nonEmpty(data.studios, prev.studios),
+    countries: nonEmpty(data.countries, prev.countries),
+    extra,
+    rating: data.rating ?? prev.rating,
+    votesCount: data.votesCount ?? prev.votesCount,
+    popularity: data.popularity,
+    totalSeasons: data.totalSeasons,
+    totalEpisodes: data.totalEpisodes,
+    latestEpisode: data.latestEpisode,
+    nextEpisodeAt: data.nextEpisodeAt,
+    isOngoing: data.isOngoing,
+    siteRank: data.siteRank,
+    searchBlob:
+      prev.originalTitle === (titleJunk ? prev.originalTitle : data.originalTitle) &&
+      prev.searchBlob
+        ? prev.searchBlob
+        : data.searchBlob,
+  };
+}
+
+/**
  * Write one normalised title, replacing its seasons/episodes/links wholesale.
  *
  * Wholesale replacement is deliberate: the source is authoritative for the rows
@@ -54,12 +130,35 @@ export async function upsertTitle(
 ): Promise<string> {
   const existing = await prisma.title.findUnique({
     where: { key: data.key },
-    select: { id: true },
+    select: {
+      id: true,
+      originalTitle: true,
+      titleAr: true,
+      titleEn: true,
+      overview: true,
+      tagline: true,
+      posterUrl: true,
+      backdropUrl: true,
+      releaseDate: true,
+      releaseYear: true,
+      runtimeMin: true,
+      showStatus: true,
+      cast: true,
+      genres: true,
+      studios: true,
+      countries: true,
+      extra: true,
+      rating: true,
+      votesCount: true,
+      searchBlob: true,
+    },
   });
 
   const providerId = data.key.slice(provider.key.length + 1);
 
-  const scalars = {
+  // تحديث صف موجود: لا تمسح الإثراء أبدًا. القادم null/فارغ/زائف يُتجاهل
+  // لصالح المخزن (هذا ما كان يمسح صور MAL والتقييمات كل 6 ساعات).
+  const scalars = existing ? mergeScalars(existing, data) : {
     originalTitle: data.originalTitle,
     titleAr: data.titleAr,
     titleEn: data.titleEn,

@@ -28,7 +28,7 @@ import type {
   StreamLink,
   TitleDetail,
 } from '../types';
-import { cleanTitle, isJunkTitle, titleFromUrlSlug } from '../normalize';
+import { cleanTitle, fixMojibake, isJunkTitle, titleFromUrlSlug } from '../normalize';
 
 interface CsvRow {
   source: string;
@@ -120,9 +120,9 @@ function slugOf(animeUrl: string): string {
     .slice(0, 80);
 }
 
-/** اسم العرض كما يظهر: المختلط يُنظَّف، والزائف يُستبدل بالمشتق من الرابط. */
+/** اسم العرض كما يظهر: إصلاح ترميز ← تنظيف ← الزائف يُستبدل بالمشتق من الرابط. */
 function shownTitle(animeUrl: string, raw: string): string {
-  const t = (raw || '').trim();
+  const t = fixMojibake((raw || '').trim());
   const cleaned = cleanTitle(t);
   if (!isJunkTitle(cleaned)) return cleaned || animeUrl;
   return titleFromUrlSlug(animeUrl) || cleaned || animeUrl;
@@ -142,6 +142,11 @@ function fileKind(url: string): StreamLink['kind'] {
   if (clean.endsWith('.m3u8')) return 'hls';
   if (clean.endsWith('.mp4')) return 'mp4';
   return 'page';
+}
+
+/** فيلم؟ — عنوان أو رابط يحمل علامة فيلم صريحة (النوع يظهر كشارة). */
+export function looksLikeMovie(title: string, animeUrl: string): boolean {
+  return /(\bthe movie\b|\bfilm\b|فيلم)/i.test(title) || /(\/film\/|\/movie\/|فيلم)/i.test(animeUrl);
 }
 
 let cache: { mtime: number; groups: Map<string, CsvRow[]> } | null = null;
@@ -222,7 +227,8 @@ function buildDetail(animeUrl: string, rows: CsvRow[]): TitleDetail | null {
   // عناوين animhq الزائفة ("الموسم 1 - الحلقة 1"): الاسم الحقيقي في الرابط.
   const title = shownTitle(animeUrl, rawTitle) || providerId;
   const poster = rows.map((r) => r.img).find((u) => u) || undefined;
-  const isMovie = rows.every((r) => (r.kind || '').trim() === 'movie');
+  const isMovie =
+    rows.every((r) => (r.kind || '').trim() === 'movie') || looksLikeMovie(title, animeUrl);
 
   const byEp = new Map<number, CsvRow[]>();
   for (const r of rows) {
@@ -240,7 +246,7 @@ function buildDetail(animeUrl: string, rows: CsvRow[]): TitleDetail | null {
     .sort((a, b) => a[0] - b[0])
     .map(([num, eps]) => ({
       number: num,
-      name: eps.map((e) => e.label).find((l) => l) || undefined,
+      name: fixMojibake(eps.map((e) => e.label).find((l) => l) || '') || undefined,
       overview: undefined,
       // صورة الصف أولًا، ثم بوستر العمل بدل الفراغ الرمادي (MAL لاحقًا إن توفرت)
       stillUrl: eps.map((e) => e.img).find((u) => u) || poster || undefined,
@@ -309,7 +315,8 @@ export const csvImportProvider: Provider = {
       const first = rows[0];
       const site = (first.source || 'unknown').trim() || 'unknown';
       const title = shownTitle(animeUrl, first.title || '');
-      const isMovie = rows.every((r) => (r.kind || '').trim() === 'movie');
+      const isMovie =
+        rows.every((r) => (r.kind || '').trim() === 'movie') || looksLikeMovie(title, animeUrl);
       return {
         providerId: `${site}:${slugOf(animeUrl)}`,
         url: animeUrl,
@@ -341,7 +348,8 @@ export const csvImportProvider: Provider = {
       const title = shownTitle(animeUrl, raw);
       if (!title.toLowerCase().includes(q)) continue;
       const site = ((rows[0]?.source || 'unknown').trim() || 'unknown');
-      const isMovie = rows.every((r) => (r.kind || '').trim() === 'movie');
+      const isMovie =
+        rows.every((r) => (r.kind || '').trim() === 'movie') || looksLikeMovie(title, animeUrl);
       out.push({
         providerId: `${site}:${slugOf(animeUrl)}`,
         url: animeUrl,

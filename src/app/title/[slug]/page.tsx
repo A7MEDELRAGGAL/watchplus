@@ -8,7 +8,7 @@ import { getDictionary, intlLocale } from '@/lib/i18n/config';
 import { getLocale } from '@/lib/i18n/server';
 import { getSessionUser } from '@/lib/auth';
 import { isInLibrary } from '@/lib/library';
-import { displayTitle, getTitleBySlug, canonicalSlug, getRelatedTitles, hasLive } from '@/lib/queries';
+import { displayTitle, getTitleBySlug, canonicalSlug, getRelatedTitles, hasLive, cleanEpisodeName, displaySeasonNumber } from '@/lib/queries';
 
 export const dynamic = 'force-dynamic';
 
@@ -90,7 +90,12 @@ export default async function TitlePage({ params }: { params: { slug: string } }
 
           <div className="space-y-4">
             <div className="space-y-2">
-              <h1 className="text-3xl font-black tracking-tight sm:text-4xl">{name}</h1>
+              <h1 className="break-words text-3xl font-black tracking-tight sm:text-4xl">{name}</h1>
+              {title.titleNative ? (
+                <p dir="ltr" className="text-start text-sm text-ink-500 dark:text-ink-400">
+                  {title.titleNative}
+                </p>
+              ) : null}
               {locale === 'ar' && title.titleEn && title.titleEn !== name ? (
                 <p dir="ltr" className="text-start text-sm text-ink-500 dark:text-ink-400">
                   {title.titleEn}
@@ -241,7 +246,7 @@ export default async function TitlePage({ params }: { params: { slug: string } }
           </div>
         </section>
 
-        <Episodes title={title} dict={dict} />
+        <Episodes title={title} dict={dict} locale={locale} />
 
         {related.length > 0 ? (
           <section className="space-y-3">
@@ -286,9 +291,11 @@ export default async function TitlePage({ params }: { params: { slug: string } }
 function Episodes({
   title,
   dict,
+  locale,
 }: {
   title: NonNullable<Awaited<ReturnType<typeof getTitleBySlug>>>;
   dict: ReturnType<typeof getDictionary>;
+  locale: 'ar' | 'en';
 }) {
   if (!title.seasons.length) {
     return (
@@ -333,14 +340,20 @@ function Episodes({
                   </div>
                   <div className="min-w-0">
                     <p className="tabular text-xs font-bold text-brand-600 dark:text-brand-400">
-                      {dict.common.season} {season.number} · {dict.common.episode} {ep.number}
+                      {dict.common.season} {displaySeasonNumber(title.originalTitle, season.number)} ·{' '}
+                      {dict.common.episode} {ep.number}
                     </p>
                     <p className="truncate text-sm font-medium">
-                      {ep.name || `Episode ${ep.number}`}
+                      {cleanEpisodeName(ep.name, ep.number)}
                     </p>
-                      <p className="text-xs text-ink-500 dark:text-ink-400">
-                        {playable ? dict.detail.sourceCount(live.length) : dict.detail.notAired}
+                    {ep.airDate ? (
+                      <p className="tabular text-[11px] text-ink-500 dark:text-ink-400">
+                        {new Date(ep.airDate).toLocaleDateString(locale === 'ar' ? 'ar-EG' : 'en-US')}
                       </p>
+                    ) : null}
+                    <p className="text-xs text-ink-500 dark:text-ink-400">
+                      {playable ? dict.detail.sourceCount(live.length) : dict.detail.notAired}
+                    </p>
                   </div>
                 </>
               );

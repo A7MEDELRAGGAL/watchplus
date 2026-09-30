@@ -23,6 +23,8 @@ import {
   isReportCategory,
   type ServerRow,
 } from '../src/lib/servers';
+import { fixMojibake, isJunkLabel } from '../src/lib/scraper/normalize';
+import { cleanEpisodeName, displaySeasonNumber, seriesKey, seasonRank } from '../src/lib/queries';
 
 /**
  * Applies one robots.txt to a path the way the crawler does, but without
@@ -306,6 +308,24 @@ const mkRow = (over: Partial<ServerRow> & { id: string }): ServerRow => ({
   assert.equal(isReportCategory('subtitle'), true);
   assert.equal(isReportCategory('other'), false);
   assert.equal(isReportCategory(undefined), false);
+  passed += 1;
+}
+
+// ── names: mojibake + episode dates + season display ──────────────────────
+{
+  // بناء الموجيباك برمجيًا (بلا ليترال غامض الترميز): عربي → بايتات → لاتيني
+  const broken = Buffer.from('الحلقة 10', 'utf8').toString('latin1');
+  assert.notEqual(broken, 'الحلقة 10');
+  assert.equal(fixMojibake(broken), 'الحلقة 10');
+  assert.equal(fixMojibake('الحلقة 10'), 'الحلقة 10');
+  assert.equal(isJunkLabel('مشاهدة وتحميل الآن'), true);
+  assert.equal(isJunkLabel('الحلقة 10'), false);
+  assert.equal(cleanEpisodeName('الحلقة 3 - 2024/01/05', 3), 'الحلقة 3');
+  assert.equal(cleanEpisodeName(null, 7), 'Episode 7');
+  assert.equal(displaySeasonNumber('Shingeki no Kyojin Season 2', 1), 2);
+  assert.equal(displaySeasonNumber('Naruto', 1), 1);
+  assert.equal(seriesKey('Shingeki no Kyojin Season 2'), 'shingeki no kyojin');
+  assert.equal(seasonRank('Bleach: The Movie'), 900);
   passed += 1;
 }
 
