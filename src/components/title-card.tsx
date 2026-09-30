@@ -1,5 +1,6 @@
 import Image from 'next/image';
 import Link from 'next/link';
+import { TitleRail } from '@/components/title-rail';
 import { displayTitle, type TitleCardData } from '@/lib/queries';
 import type { Dict, Locale } from '@/lib/i18n/config';
 
@@ -92,29 +93,21 @@ export function TitleRow({
   locale: Locale;
   dict: Dict;
 }) {
+  if (title.length === 0) {
+    return (
+      <p className="card p-6 text-sm text-ink-500 dark:text-ink-400">{dict.common.empty}</p>
+    );
+  }
   return (
-    <section className="space-y-3">
-      <div className="flex items-baseline justify-between gap-4">
-        <h2 className="text-lg font-bold tracking-tight sm:text-xl">{heading}</h2>
-        <Link
-          href={href}
-          className="shrink-0 text-sm font-medium text-brand-600 hover:underline dark:text-brand-400"
+    <TitleRail heading={heading} href={href} viewAll={dict.common.viewAll}>
+      {title.map((t, i) => (
+        <li
+          key={t.id}
+          className="w-[38vw] max-w-[170px] shrink-0 snap-start sm:w-[23vw] md:w-[18vw] lg:w-[13.5vw] lg:max-w-none"
         >
-          {dict.common.viewAll}
-        </Link>
-      </div>
-
-      {title.length === 0 ? (
-        <p className="card p-6 text-sm text-ink-500 dark:text-ink-400">{dict.common.empty}</p>
-      ) : (
-        <ul className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-          {title.map((t, i) => (
-            <li key={t.id}>
-              <TitleCard title={t} locale={locale} dict={dict} priority={i < 6} />
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
+          <TitleCard title={t} locale={locale} dict={dict} priority={i < 6} />
+        </li>
+      ))}
+    </TitleRail>
   );
 }

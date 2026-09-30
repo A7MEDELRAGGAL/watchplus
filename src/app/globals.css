@@ -3,13 +3,12 @@
 @tailwind utilities;
 
 /*
- * Font stacks are set as variables rather than loaded through next/font so the
- * build never depends on reaching Google Fonts. Swap these for next/font
- * (Cairo for Arabic, Inter for Latin) when the real UI lands.
+ * Cairo (عربي + لاتيني) وInter (لاتيني) عبر fontsource — حزم محلية،
+ * لا يعتمد البناء على الوصول لجوجل فونتس.
  */
 :root {
-  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --font-arabic: 'Segoe UI', Tahoma, 'Noto Naskh Arabic', 'Geeza Pro', sans-serif;
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-arabic: 'Cairo Variable', 'Inter Variable', ui-sans-serif, system-ui, Tahoma, sans-serif;
 }
 
 @layer base {
@@ -40,6 +39,36 @@
   /* Mirror the handful of directional utilities that Tailwind cannot auto-flip. */
   [dir='rtl'] .flip-x {
     transform: scaleX(-1);
+  }
+
+  ::selection {
+    background: rgb(225 29 72 / 0.85);
+    color: #fff;
+  }
+
+  /* سكك البطاقات: تمرير بلا شريط مرئي */
+  .rail {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .rail::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* شريط رفيع أنيق لباقي الصفحة */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #434d64;
+    border-radius: 8px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #e11d48;
   }
 
   @media (prefers-reduced-motion: reduce) {

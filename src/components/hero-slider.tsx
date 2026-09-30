@@ -107,6 +107,15 @@ export function HeroSlider({
 
         {slides.length > 1 ? (
           <>
+            {/* autoplay progress + counter */}
+            <div className="absolute inset-x-0 top-0 h-0.5 bg-white/15">
+              {!paused ? (
+                <div key={index} className="h-full animate-progress bg-brand-500" />
+              ) : null}
+            </div>
+            <span className="tabular absolute end-5 top-3 rounded-md bg-black/50 px-2 py-0.5 text-[11px] font-bold text-white backdrop-blur sm:end-8">
+              {index + 1} / {slides.length}
+            </span>
             <div className="absolute bottom-5 end-5 flex items-center gap-1.5 sm:bottom-8 sm:end-8">
               {slides.map((s, i) => (
                 <button

@@ -1,5 +1,7 @@
 import Link from 'next/link';
 import { LocaleToggle } from '@/components/locale-toggle';
+import { ThemeToggle } from '@/components/theme-toggle';
+import { SearchBox } from '@/components/search-box';
 import { NavLink } from '@/components/nav-link';
 import { LogoutButton } from '@/components/library-button';
 import type { Session } from '@/lib/auth';
@@ -59,12 +61,8 @@ export function SiteHeader({
         ) : null}
 
         <div className="ms-auto flex items-center gap-2">
-          <Link
-            href="/search"
-            className="hidden rounded-lg border border-ink-200 px-3 py-1.5 text-sm text-ink-500 transition hover:text-ink-900 sm:block dark:border-ink-700 dark:text-ink-400 dark:hover:text-white"
-          >
-            {dict.nav.search}
-          </Link>
+          <SearchBox locale={locale} placeholder={dict.search.placeholder} />
+          <ThemeToggle />
           <LocaleToggle locale={locale} label={dict.common.switchLanguage} />
           {user ? (
             <div className="flex items-center gap-2">

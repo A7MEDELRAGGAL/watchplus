@@ -34,8 +34,8 @@ const config: Config = {
           600: '#525f7c',
           700: '#434d64',
           800: '#3a4253',
-          900: '#343a47',
-          950: '#23262e',
+          900: '#151923',
+          950: '#0b0d12',
         },
       },
       fontFamily: {
@@ -59,12 +59,17 @@ const config: Config = {
           from: { opacity: '0', transform: 'scale(.96)' },
           to: { opacity: '1', transform: 'scale(1)' },
         },
+        progress: {
+          from: { width: '0%' },
+          to: { width: '100%' },
+        },
       },
       animation: {
         'fade-in': 'fade-in .4s ease-out both',
         'fade-up': 'fade-up .4s ease-out both',
         'scale-in': 'scale-in .18s ease-out both',
         shimmer: 'shimmer 1.6s infinite',
+        progress: 'progress 7s linear both',
       },
       boxShadow: {
         card: '0 1px 2px rgb(16 24 40 / .06), 0 8px 24px -12px rgb(16 24 40 / .18)',

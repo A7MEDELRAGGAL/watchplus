@@ -3,6 +3,7 @@ import { SiteHeader } from '@/components/site-header';
 import { SiteFooter } from '@/components/site-footer';
 import { HeroSlider } from '@/components/hero-slider';
 import { TitleCard, TitleRow } from '@/components/title-card';
+import { TitleRail } from '@/components/title-rail';
 import { getDictionary, intlLocale } from '@/lib/i18n/config';
 import { getLocale } from '@/lib/i18n/server';
 import { getSessionUser } from '@/lib/auth';
@@ -56,26 +57,20 @@ export default async function HomePage() {
               />
             ) : null}
             {continueRows.length > 0 ? (
-              <section className="space-y-3">
-                <div className="flex items-baseline justify-between gap-4">
-                  <h2 className="text-lg font-bold tracking-tight sm:text-xl">
-                    {dict.library.continueWatching}
-                  </h2>
-                  <Link
-                    href="/continue"
-                    className="shrink-0 text-sm font-medium text-brand-600 hover:underline dark:text-brand-400"
+              <TitleRail
+                heading={dict.library.continueWatching}
+                href="/continue"
+                viewAll={dict.common.viewAll}
+              >
+                {continueRows.map(({ title }) => (
+                  <li
+                    key={title.id}
+                    className="w-[38vw] max-w-[170px] shrink-0 snap-start sm:w-[23vw] md:w-[18vw] lg:w-[13.5vw] lg:max-w-none"
                   >
-                    {dict.common.viewAll}
-                  </Link>
-                </div>
-                <ul className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-                  {continueRows.map(({ title }) => (
-                    <li key={title.id}>
-                      <TitleCard title={title} locale={locale} dict={dict} />
-                    </li>
-                  ))}
-                </ul>
-              </section>
+                    <TitleCard title={title} locale={locale} dict={dict} />
+                  </li>
+                ))}
+              </TitleRail>
             ) : null}
             {sections.map((s) => (
               <TitleRow
