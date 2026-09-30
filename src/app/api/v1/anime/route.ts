@@ -7,13 +7,18 @@ export const dynamic = 'force-dynamic';
 
 /**
  * GET /api/v1/anime — فهرس الأعمال (قراءة فقط، لا روابط ستريم مباشرة).
- * يدعم: q, type, sort(rating|popular|newest), page, perPage + ?envelope=1
+ * يدعم: q, type, sort(rating|popular|newest), available=1, minRating, page, perPage + ?envelope=1
  */
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const q = (url.searchParams.get('q') ?? '').trim().toLowerCase();
   const type = url.searchParams.get('type') ?? undefined;
   const sort = url.searchParams.get('sort') ?? 'popular';
+  const available = url.searchParams.get('available') === '1';
+  const minRatingRaw = url.searchParams.get('minRating') ?? url.searchParams.get('rating');
+  const minRating = Number(minRatingRaw);
+  // status=COMPLETED|ONGOING (يتطابق مع isOngoing)
+  const status = (url.searchParams.get('status') ?? '').toUpperCase();
   const page = Math.max(1, Number(url.searchParams.get('page')) || 1);
   const perPage = Math.min(48, Math.max(1, Number(url.searchParams.get('perPage')) || 24));
   const locale = isLocale(url.searchParams.get('locale')) ? url.searchParams.get('locale')! : 'ar';
@@ -21,6 +26,12 @@ export async function GET(request: Request) {
   const where = {
     status: 'PUBLISHED',
     ...(type ? { type } : {}),
+    ...(Number.isFinite(minRating) && minRating > 0 ? { rating: { gte: minRating } } : {}),
+    ...(status === 'COMPLETED' ? { isOngoing: false } : {}),
+    ...(status === 'ONGOING' ? { isOngoing: true } : {}),
+    ...(available
+      ? { seasons: { some: { episodes: { some: { sources: { some: { isDead: false } } } } } } }
+      : {}),
     ...(q.length >= 2
       ? { OR: [{ searchBlob: { contains: q } }, { originalTitle: { contains: q, mode: 'insensitive' as const } }] }
       : {}),

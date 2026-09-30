@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { classify, readFails, type ServerRow } from '@/lib/servers';
+import { classify, matchesKindGroup, readFails, type KindGroup, type ServerRow } from '@/lib/servers';
 
 export const dynamic = 'force-dynamic';
 
@@ -50,8 +50,10 @@ export async function GET(request: Request, { params }: { params: { id: string }
   }));
 
   let servers = rows.map(classify);
-  if (kind === 'download') servers = servers.filter((s) => s.isDownload);
-  else if (kind === 'stream') servers = servers.filter((s) => !s.isDownload);
+  // مجموعات kind حسب القيم المخزنة فعلًا (iframe/mp4/page/hls)
+  if (kind === 'download' || kind === 'stream') {
+    servers = servers.filter((s) => matchesKindGroup(s.kind, kind as KindGroup));
+  }
 
   const order: Record<string, number> = { active: 0, suspect: 1, expired: 2, dead: 3 };
   servers.sort((a, b) => order[a.status] - order[b.status]);

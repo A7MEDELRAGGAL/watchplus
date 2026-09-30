@@ -21,6 +21,7 @@ import {
   isExpiringLink,
   isDownloadable,
   isReportCategory,
+  matchesKindGroup,
   type ServerRow,
 } from '../src/lib/servers';
 import { fixMojibake, isJunkLabel } from '../src/lib/scraper/normalize';
@@ -298,6 +299,17 @@ const mkRow = (over: Partial<ServerRow> & { id: string }): ServerRow => ({
   assert.equal(isDownloadable({ kind: 'mp4', streamUrl: 'https://x.test/f.mp4' }), true);
   assert.equal(dl.isDownload, true);
   assert.equal(isDownloadable({ kind: 'iframe', streamUrl: null }), false);
+  passed += 1;
+}
+
+{
+  // kind mapping حسب القيم المخزنة فعلًا (iframe/mp4/page — لا stream/download)
+  assert.equal(matchesKindGroup('iframe', 'stream'), true);
+  assert.equal(matchesKindGroup('mp4', 'stream'), true);
+  assert.equal(matchesKindGroup('mp4', 'download'), true);
+  assert.equal(matchesKindGroup('page', 'download'), true);
+  assert.equal(matchesKindGroup('page', 'stream'), false);
+  assert.equal(matchesKindGroup('iframe', 'download'), false);
   passed += 1;
 }
 

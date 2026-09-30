@@ -23,6 +23,7 @@
     "fix:stills": "tsx scripts/backfill-stills.ts",
     "fix:mojibake": "tsx scripts/fix-mojibake.ts",
     "fix:meta": "tsx scripts/fix-meta.ts",
+    "import:scraper": "tsx scripts/import-scraper.ts",
     "fix:backdrops": "tsx scripts/fix-backdrops.ts",
     "fix:posters": "tsx scripts/check-posters.ts",
     "secrets:rotate": "tsx scripts/rotate-secrets.ts",

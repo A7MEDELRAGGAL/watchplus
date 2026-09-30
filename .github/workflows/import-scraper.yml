@@ -1,0 +1,42 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Scraper import: pulls matched servers from the scraper bot's Neon tables
+# (series/releases/episodes/servers) into the website's EpisodeSource rows.
+# Idempotent (sc:<id> providerIds) — reruns add zero. Manual trigger only.
+# ─────────────────────────────────────────────────────────────────────────────
+name: import-scraper
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: import-scraper
+  cancel-in-progress: false
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Dry run first (report only)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npx tsx scripts/import-scraper.ts
+
+      - name: Apply import
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npx tsx scripts/import-scraper.ts -- --go

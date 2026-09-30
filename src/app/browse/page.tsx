@@ -15,6 +15,8 @@ type SearchParams = {
   year?: string;
   sort?: string;
   page?: string;
+  available?: string;
+  minRating?: string;
 };
 
 const TYPES = ['MOVIE', 'SERIES', 'ANIME', 'DOCUMENTARY'];
@@ -36,6 +38,7 @@ export default async function BrowsePage({ searchParams }: { searchParams: Searc
     ? searchParams.sort
     : 'popular') as SortKey;
   const year = searchParams.year ? Number(searchParams.year) : undefined;
+  const minRating = searchParams.minRating ? Number(searchParams.minRating) : undefined;
 
   const { items, total, page, pageCount, years, genres } = await listTitles({
     type: searchParams.type,
@@ -43,9 +46,11 @@ export default async function BrowsePage({ searchParams }: { searchParams: Searc
     year: Number.isFinite(year) ? year : undefined,
     sort,
     page: searchParams.page ? Number(searchParams.page) : 1,
+    available: searchParams.available === '1',
+    minRating: typeof minRating === 'number' && Number.isFinite(minRating) ? minRating : undefined,
   });
 
-  const current = { type: searchParams.type, genre: searchParams.genre, year: searchParams.year, sort, page: searchParams.page };
+  const current = { type: searchParams.type, genre: searchParams.genre, year: searchParams.year, sort, page: searchParams.page, available: searchParams.available, minRating: searchParams.minRating };
 
   return (
     <div className="min-h-dvh">
@@ -66,6 +71,7 @@ export default async function BrowsePage({ searchParams }: { searchParams: Searc
         <div className="card space-y-4 p-4 sm:p-5">
           <Filters
             dict={dict}
+            locale={locale}
             types={TYPES}
             genres={genres}
             years={years}
@@ -120,6 +126,7 @@ export default async function BrowsePage({ searchParams }: { searchParams: Searc
 
 function Filters({
   dict,
+  locale,
   types,
   genres,
   years,
@@ -127,6 +134,7 @@ function Filters({
   href,
 }: {
   dict: ReturnType<typeof getDictionary>;
+  locale: 'ar' | 'en';
   types: string[];
   genres: { name: string; slug?: string }[];
   years: number[];
@@ -168,6 +176,27 @@ function Filters({
             className={current.sort === s || (!current.sort && s === 'popular') ? active : idle}
           >
             {dict.browse.sorts[s]}
+          </Link>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="me-1 text-xs font-semibold uppercase tracking-wide text-ink-500">
+          {locale === 'ar' ? 'الحالة' : 'Status'}
+        </span>
+        <Link
+          href={href(current, { available: current.available === '1' ? undefined : '1', page: undefined })}
+          className={current.available === '1' ? active : idle}
+        >
+          {locale === 'ar' ? 'متاح للمشاهدة ✓' : 'Watchable ✓'}
+        </Link>
+        {[7, 8].map((r) => (
+          <Link
+            key={r}
+            href={href(current, { minRating: current.minRating === String(r) ? undefined : String(r), page: undefined })}
+            className={current.minRating === String(r) ? active : idle}
+          >
+            {locale === 'ar' ? `تقييم ${r}+` : `Rated ${r}+`}
           </Link>
         ))}
       </div>

@@ -325,6 +325,8 @@ function Episodes({
             {season.episodes.map((ep) => {
               const live = ep.sources.filter((s) => !s.isDead);
               const playable = live.length > 0;
+              // "لم تبث بعد" للمواعيد المستقبلية فقط — القديم بلا روابط له رسالته
+              const upcoming = ep.airDate ? new Date(ep.airDate).getTime() > Date.now() : false;
               const inner = (
                 <>
                   <div className="relative aspect-video w-32 shrink-0 overflow-hidden rounded-lg bg-ink-200 dark:bg-ink-800">
@@ -352,7 +354,11 @@ function Episodes({
                       </p>
                     ) : null}
                     <p className="text-xs text-ink-500 dark:text-ink-400">
-                      {playable ? dict.detail.sourceCount(live.length) : dict.detail.notAired}
+                      {playable
+                        ? dict.detail.sourceCount(live.length)
+                        : upcoming
+                          ? dict.detail.notAired
+                          : dict.detail.noSources}
                     </p>
                   </div>
                 </>

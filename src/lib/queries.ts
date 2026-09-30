@@ -180,6 +180,10 @@ export interface BrowseArgs {
   sort?: SortKey;
   page?: number;
   perPage?: number;
+  /** فقط عناوين فيها سيرفر حي واحد على الأقل */
+  available?: boolean;
+  /** أقل تقييم (0-10) */
+  minRating?: number;
 }
 
 export async function listTitles(args: BrowseArgs = {}) {
@@ -190,6 +194,12 @@ export async function listTitles(args: BrowseArgs = {}) {
     ...PUBLISHED,
     ...(args.type ? { type: args.type } : {}),
     ...(args.year ? { releaseYear: args.year } : {}),
+    ...(typeof args.minRating === 'number'
+      ? { rating: { gte: args.minRating } }
+      : {}),
+    ...(args.available
+      ? { seasons: { some: { episodes: { some: { sources: { some: { isDead: false } } } } } } }
+      : {}),
     // genres is JSON text, so the facet is matched on the stored slug. It is an
     // index-less LIKE, which is acceptable at this catalogue size; a real
     // `TitleGenre` join table is the fix if the catalogue grows a lot.

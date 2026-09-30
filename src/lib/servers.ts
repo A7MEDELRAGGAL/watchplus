@@ -48,6 +48,21 @@ export function isDownloadable(s: Pick<ServerRow, 'kind' | 'streamUrl'>): boolea
   return !!s.streamUrl && /\.mp4(\?|$)/i.test(s.streamUrl.split('?')[0]);
 }
 
+/**
+ * مجموعات kind حسب القيم الفعلية في القاعدة (لا توجد 'stream'/'download'
+ * مخزنة — iframe/mp4/page/hls فقط). مطابقة لعقد الـ API:
+ * stream ← iframe + mp4 (+hls)، وdownload ← mp4 + page.
+ */
+export const KIND_GROUPS = {
+  stream: ['iframe', 'mp4', 'hls'],
+  download: ['mp4', 'page'],
+} as const;
+export type KindGroup = keyof typeof KIND_GROUPS;
+
+export function matchesKindGroup(kind: string, group: KindGroup): boolean {
+  return (KIND_GROUPS[group] as readonly string[]).includes(kind.toLowerCase());
+}
+
 export function classify(s: ServerRow): ClassifiedServer {
   const target = s.streamUrl || s.url;
   const expiring = isExpiringLink(target);
