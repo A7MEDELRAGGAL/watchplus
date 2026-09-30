@@ -202,55 +202,80 @@ export function collectGenres(rows: { genres: string | null }[]): Genre[] {
 // Detail
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Next.js may hand dynamic params still percent-encoded for non-ASCII slugs
+ * (verified live: /title/dragon-ball-gt-%D9%85... 404s while the decoded row
+ * exists). Try the slug as-is, then decoded — whichever hits wins.
+ */
+function slugVariants(slug: string): string[] {
+  const out = [slug];
+  try {
+    const decoded = decodeURIComponent(slug);
+    if (decoded !== slug) out.push(decoded);
+  } catch {
+    /* malformed escape — use raw only */
+  }
+  return [...new Set(out)];
+}
+
 export async function getTitleBySlug(slug: string) {
-  const title = await prisma.title.findFirst({
-    where: { slug, ...PUBLISHED },
-    select: {
-      ...TITLE_SELECT,
-      cast: true,
-      countries: true,
-      key: true,
-      sources: {
-        select: { provider: true, url: true, isDead: true, language: true },
-        where: { isDead: false },
-      },
-      seasons: {
-        orderBy: { number: 'asc' },
-        select: {
-          id: true,
-          number: true,
-          name: true,
-          overview: true,
-          airDate: true,
-          episodes: {
-            orderBy: { number: 'asc' },
-            select: {
-              id: true,
-              number: true,
-              name: true,
-              overview: true,
-              stillUrl: true,
-              runtime: true,
-              airDate: true,
-              sources: {
-                where: { isDead: false },
-                select: {
-                  id: true,
-                  provider: true,
-                  name: true,
-                  url: true,
-                  streamUrl: true,
-                  kind: true,
-                  quality: true,
-                  language: true,
-                },
-              },
-            },
-          },
-        },
+  const episodeSelect = {
+    id: true,
+    number: true,
+    name: true,
+    overview: true,
+    stillUrl: true,
+    runtime: true,
+    airDate: true,
+    sources: {
+      where: { isDead: false },
+      select: {
+        id: true,
+        provider: true,
+        name: true,
+        url: true,
+        streamUrl: true,
+        kind: true,
+        quality: true,
+        language: true,
       },
     },
-  });
+  } as const;
+  const seasonSelect = {
+    id: true,
+    number: true,
+    name: true,
+    overview: true,
+    airDate: true,
+    episodes: { orderBy: { number: 'asc' }, select: episodeSelect },
+  } as const;
+
+  async function lookup(s: string) {
+    return prisma.title.findFirst({
+      where: { slug: s, ...PUBLISHED },
+      select: {
+        ...TITLE_SELECT,
+        cast: true,
+        countries: true,
+        key: true,
+        sources: {
+          select: { provider: true, url: true, isDead: true, language: true },
+          where: { isDead: false },
+        },
+        seasons: { orderBy: { number: 'asc' }, select: seasonSelect },
+      },
+    });
+  }
+
+  let title = await lookup(slug);
+  if (!title) {
+    try {
+      const decoded = decodeURIComponent(slug);
+      if (decoded !== slug) title = await lookup(decoded);
+    } catch {
+      /* malformed escape — keep null */
+    }
+  }
 
   if (!title) return null;
 

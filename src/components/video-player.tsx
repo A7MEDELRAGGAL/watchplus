@@ -26,9 +26,14 @@ type Resolved =
  * lets us show quality and resume position.
  */
 function resolve(source: PlayableSource): Resolved | null {
-  // An origin page link cannot be embedded — it is either plain HTML or blocked
-  // by X-Frame-Options — so it renders as an "open source" action instead.
-  if (source.kind === 'page') return null;
+  // كل حاجة تشتغل جوه الموقع: حتى روابط الصفحات تُضمَّن كـ iframe
+  // (لو host منع التضمين ستظهر مساحة فاضية بدل طرد المستخدم لبره).
+  if (source.kind === 'page') {
+    if (source.url && /^https?:\/\//i.test(source.url)) {
+      return { type: 'iframe', src: source.url };
+    }
+    return null;
+  }
   if (source.streamUrl) {
     const isHls = /\.m3u8(\?|$)/i.test(source.streamUrl);
     return {
@@ -182,25 +187,10 @@ export function VideoPlayer({
   return (
     <div className="space-y-3">
       <div className="relative aspect-video w-full overflow-hidden rounded-2xl bg-black">
-        {!resolved ? (
-          source?.url ? (
-            // A page-type source (or one that failed to resolve): offer the
-            // origin link rather than a silently dead frame.
-            <div className="grid h-full place-items-center p-6">
-              <a
-                href={source.url}
-                target="_blank"
-                rel="noreferrer noopener"
-                className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-700"
-              >
-                {labels.openSource} · {source.name || source.provider}
-              </a>
-            </div>
-          ) : (
-            <div className="grid h-full place-items-center p-6 text-center text-sm text-ink-400">
-              {labels.unavailable}
-            </div>
-          )
+      {!resolved ? (
+          <div className="grid h-full place-items-center p-6 text-center text-sm text-ink-400">
+            {labels.unavailable}
+          </div>
         ) : resolved.type === 'iframe' ? (
           <iframe
             key={resolved.src}
@@ -253,15 +243,6 @@ export function VideoPlayer({
             </button>
           ))}
         </div>
-      ) : source ? (
-        <a
-          href={source.url}
-          target="_blank"
-          rel="noreferrer noopener"
-          className="inline-block text-xs font-medium text-ink-500 underline hover:text-ink-800 dark:text-ink-400"
-        >
-          {labels.openSource} · {source.provider}
-        </a>
       ) : null}
     </div>
   );

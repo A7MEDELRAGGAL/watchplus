@@ -157,37 +157,44 @@ function loadGroups(csvPath: string): Map<string, CsvRow[]> {
   return groups;
 }
 
+/**
+ * White-label: أزرار المشغّل "سيرفر 1..N" بدل أسماء المنصات (mega/ok.ru…).
+ * الترتيب هو ترتيب الجودة (الأفضل أولًا) ويُعرض مع الجودة إن وجدت.
+ */
 function streamsFor(rows: CsvRow[], site: string): StreamLink[] {
   const out: StreamLink[] = [];
   let n = 0;
+  const push = (s: Omit<StreamLink, 'providerId'>) => {
+    n += 1;
+    out.push({ ...s, providerId: `${site}:s${n}` });
+  };
   for (const row of rows) {
-    const names = splitPipe(row.servers);
-    const embList = splitPipe(row.embeds);
-    embList.forEach((emb, i) => {
-      n += 1;
-      out.push({
-        providerId: `${site}:emb:${n}`,
+    const quals = splitPipe(row.servers)
+      .map((s) => {
+        const m = s.match(/\(([^)]+)\)/);
+        return m ? m[1] : null;
+      });
+    splitPipe(row.embeds).forEach((emb, i) => {
+      push({
         
         url: emb, // المشغّل يضع الـ embed في iframe مباشرة
         streamUrl: undefined,
         kind: 'iframe',
-        name: names[i] || hostLabel(emb),
-        quality: undefined,
+        name: `سيرفر ${out.length + 1}`,
+        quality: quals[i] || undefined,
         language: 'ar',
         headers: undefined,
       });
     });
     for (const f of splitPipe(row.file_urls)) {
-      n += 1;
       const kind = fileKind(f);
       const direct = kind === 'mp4' || kind === 'hls';
-      out.push({
-        providerId: `${site}:file:${n}`,
+      push({
         
         url: direct ? row.watch_url : f,
         streamUrl: direct ? f : undefined,
         kind,
-        name: hostLabel(f),
+        name: `سيرفر ${out.length + 1}`,
         quality: undefined,
         language: 'ar',
         headers: undefined,
@@ -330,4 +337,5 @@ export const csvImportProvider: Provider = {
     return out;
   },
 };
+
 
