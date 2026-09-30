@@ -88,7 +88,9 @@ export function EpisodeView({
   );
   const sites = useMemo(() => [...new Set(servers.map((s) => s.provider))], [servers]);
 
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // الاختيار الافتراضي محسوب أثناء الرسم (SSR يتضمن المشغّل فورًا)،
+  // ثم يُستبدل المحفوظ من localStorage بعد التحميل
+  const [selectedId, setSelectedId] = useState<string | null>(() => pickDefault(sorted)?.id ?? null);
   const [quality, setQuality] = useState<string | null>(null);
   const [site, setSite] = useState<string | null>(null);
   const [showDead, setShowDead] = useState(false);
