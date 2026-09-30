@@ -221,6 +221,10 @@ function buildDetail(animeUrl: string, rows: CsvRow[]): TitleDetail | null {
     list.push(r);
     byEp.set(num, list);
   }
+  if (byEp.size === 0 && rows.length) {
+    // بلا أرقام إطلاقًا (روابط vid مبهمة) — ترقيم تسلسلي بدل الإسقاط
+    rows.forEach((r, i) => byEp.set(i + 1, [r]));
+  }
   const episodes: EpisodeDetail[] = [...byEp.entries()]
     .sort((a, b) => a[0] - b[0])
     .map(([num, eps]) => ({
