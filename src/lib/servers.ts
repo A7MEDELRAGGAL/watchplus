@@ -33,11 +33,6 @@ const EXPIRY_PATTERNS = [/expires=/i, /[?&]token=/i, /signature=/i, /exp=\d{9,}/
 export function isExpiringLink(target: string): boolean {
   return EXPIRY_PATTERNS.some((p) => p.test(target));
 }
-
-/**
- * expires_at الحقيقي: يُقرأ من expires=<unix> في الرابط، وإلا null —
- * أبدًا ليس checked_at.
- */
 export function parseExpiry(target: string): string | null {
   const m = target.match(/[?&]expires=(\d{10,13})/i) || target.match(/[?&]exp=(\d{10,13})/i);
   if (!m) return null;
@@ -46,6 +41,16 @@ export function parseExpiry(target: string): string | null {
   if (!Number.isFinite(ms) || ms <= 0) return null;
   const d = new Date(ms);
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+/**
+ * منتهٍ فعلًا = طابع expires ماضٍ فقط. الرابط الموقّع بتاريخ مستقبلي
+ * يعمل الآن (صالح) — التوقيع وحده ليس موتًا.
+ */
+export function isActuallyExpired(target: string): boolean {
+  const iso = parseExpiry(target);
+  if (!iso) return false;
+  return new Date(iso).getTime() <= Date.now();
 }
 
 export function hostOf(url: string | null): string | null {
@@ -79,9 +84,10 @@ export function matchesKindGroup(kind: string, group: KindGroup): boolean {
 
 export function classify(s: ServerRow): ClassifiedServer {
   const target = s.streamUrl || s.url;
-  const expiring = isExpiringLink(target);
+  const expired = isActuallyExpired(target);
+  const signed = !expired && isExpiringLink(target);
   let status: ServerStatus;
-  if (expiring) status = 'expired';
+  if (expired) status = 'expired';
   else if (s.isDead || s.fails >= 3) status = 'dead';
   else if (s.fails >= 1) status = 'suspect';
   else status = 'active';
@@ -90,7 +96,7 @@ export function classify(s: ServerRow): ClassifiedServer {
     status,
     isDownload: isDownloadable(s),
     host: hostOf(target),
-    expiresAt: expiring ? (parseExpiry(target) ?? null) : null,
+    expiresAt: signed || expired ? (parseExpiry(target) ?? null) : null,
   };
 }
 

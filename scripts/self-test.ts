@@ -19,6 +19,7 @@ import {
   filterServers,
   pickDefault,
   isExpiringLink,
+  isActuallyExpired,
   isDownloadable,
   isReportCategory,
   matchesKindGroup,
@@ -266,9 +267,10 @@ const mkRow = (over: Partial<ServerRow> & { id: string }): ServerRow => ({
 }
 
 {
-  // 3 (منطق الاختيار): الافتراضي active ثم suspect، والمنتهي/الميت ليس صالحًا
+  // 3 (منطق الاختيار): الافتراضي active ثم suspect، والمنتهي فعلًا/الميت ليس صالحًا
+  const pastTs = String(Math.floor(Date.now() / 1000) - 7200);
   const rows = [
-    mkRow({ id: 'x', url: 'https://x.test/e?expires=99', streamUrl: null }),
+    mkRow({ id: 'x', url: `https://x.test/e?expires=${pastTs}`, streamUrl: null }),
     mkRow({ id: 's', fails: 1 }),
     mkRow({ id: 'a' }),
   ].map(classify);
@@ -293,9 +295,14 @@ const mkRow = (over: Partial<ServerRow> & { id: string }): ServerRow => ({
 }
 
 {
-  // 5: المنتهي ليس صالحًا + mp4 المباشر قابل للتحميل
-  assert.equal(isExpiringLink('https://x.test/f.mp4?expires=123&token=abc'), true);
-  assert.equal(isExpiringLink('https://x.test/embed/1'), false);
+  // 5: المنتهي فعلًا ليس صالحًا + mp4 المباشر قابل للتحميل
+  // (الموقّع بتاريخ مستقبلي يعمل — التوقيع وحده ليس موتًا)
+  const past = Math.floor(Date.now() / 1000) - 3600;
+  const future = Math.floor(Date.now() / 1000) + 3600;
+  assert.equal(isExpiringLink(`https://x.test/f.mp4?expires=${past}&token=abc`), true);
+  assert.equal(isActuallyExpired(`https://x.test/f.mp4?expires=${past}`), true);
+  assert.equal(isActuallyExpired(`https://x.test/f.mp4?expires=${future}&token=abc`), false);
+  assert.equal(isActuallyExpired('https://x.test/embed/1'), false);
   const dl = classify(mkRow({ id: 'm', kind: 'mp4', streamUrl: 'https://x.test/f.mp4' }));
   assert.equal(isDownloadable({ kind: 'mp4', streamUrl: 'https://x.test/f.mp4' }), true);
   assert.equal(dl.isDownload, true);
