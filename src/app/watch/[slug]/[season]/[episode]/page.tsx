@@ -2,12 +2,14 @@ import Link from 'next/link';
 import { notFound, permanentRedirect } from 'next/navigation';
 import { SiteHeader } from '@/components/site-header';
 import { SiteFooter } from '@/components/site-footer';
-import { VideoPlayer } from '@/components/video-player';
+import { EpisodeView, type EpisodeViewServer } from '@/components/episode-view';
 import { getDictionary } from '@/lib/i18n/config';
 import { getLocale } from '@/lib/i18n/server';
 import { getSessionUser } from '@/lib/auth';
+import { displayTitle } from '@/lib/queries';
 import { prisma } from '@/lib/db';
 import { getTitleBySlug, canonicalSlug } from '@/lib/queries';
+import { classify, readFails, type ServerRow } from '@/lib/servers';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,16 +17,6 @@ interface Params {
   slug: string;
   season: string;
   episode: string;
-}
-
-/** host المصدر للعرض فقط (لا روابط خارجية — التشغيل كله داخل الموقع). */
-function hostOf(url: string | null): string {
-  if (!url) return '—';
-  try {
-    return new URL(url).hostname.replace(/^www\./, '');
-  } catch {
-    return '—';
-  }
 }
 
 export default async function WatchPage({ params }: { params: Params }) {
@@ -47,20 +39,34 @@ export default async function WatchPage({ params }: { params: Params }) {
 
   if (!season || !episode) notFound();
 
-  // Flatten once so prev/next does not have to reason about season boundaries.
+  // 1) مسار التنقل: السلسلة (لينك) ← الموسم/الإصدار ← رقم الحلقة كما ورد
+  const seriesName = displayTitle(title, locale);
+
+  // سيرفرات الحلقة بكل الحالات + تصنيفها (active ← suspect ← expired ← dead)
+  const rows: ServerRow[] = episode.sources.map((s) => ({
+    id: s.id,
+    provider: s.provider,
+    label: s.name,
+    quality: s.quality,
+    kind: s.kind,
+    url: s.url,
+    streamUrl: s.streamUrl,
+    isDead: s.isDead,
+    fails: readFails(s.headers),
+    checkedAt: s.lastSyncedAt ? new Date(s.lastSyncedAt).toISOString() : null,
+  }));
+  const servers: EpisodeViewServer[] = rows.map((r) => ({ ...classify(r), checkedAt: r.checkedAt }));
+
+  // سابق/تالي عبر حدود المواسم
   const ordered = title.seasons.flatMap((s) =>
-    s.episodes.map((e) => ({
-      season: s.number,
-      number: e.number,
-      playable: e.sources.length > 0,
-    })),
+    s.episodes.map((e) => ({ season: s.number, number: e.number })),
   );
   const index = ordered.findIndex((e) => e.season === seasonNumber && e.number === episodeNumber);
   const prev = index > 0 ? ordered[index - 1] : null;
   const next = index >= 0 && index < ordered.length - 1 ? ordered[index + 1] : null;
+  const nextHref = next ? `/watch/${title.slug}/${next.season}/${next.number}` : null;
 
-  // Where this user left off, so the player can seek. Only meaningful for a
-  // direct stream — an <iframe> embed has its own player and its own clock.
+  // استئناف المشاهدة للستريم المباشر
   const progress = user
     ? await prisma.playProgress.findUnique({
         where: { userId_episodeId: { userId: user.id, episodeId: episode.id } },
@@ -68,14 +74,12 @@ export default async function WatchPage({ params }: { params: Params }) {
       })
     : null;
   const startAt = progress?.seconds ?? 0;
-  const resumable =
-    startAt > 10 &&
-    (!episode.runtime || startAt < episode.runtime * 60 - 30);
+  const resumable = startAt > 10 && (!episode.runtime || startAt < episode.runtime * 60 - 30);
 
-  // Which of this season's episodes this user has touched, for the picker.
+  // حلقات الموسم + علامات المشاهَدة
   const watchedEpisodes = new Set<number>();
   if (user) {
-    const rows = await prisma.playProgress.findMany({
+    const rws = await prisma.playProgress.findMany({
       where: {
         userId: user.id,
         seconds: { gte: 15 },
@@ -83,184 +87,174 @@ export default async function WatchPage({ params }: { params: Params }) {
       },
       select: { episode: { select: { number: true } } },
     });
-    for (const r of rows) watchedEpisodes.add(r.episode.number);
+    for (const r of rws) watchedEpisodes.add(r.episode.number);
   }
 
   return (
-    // غرفة المشاهدة داكنة دائمًا (class strategy يجعل dark: يعمل هنا مهما كان الثيم)
+    // غرفة المشاهدة داكنة دائمًا
     <div className="dark min-h-dvh bg-ink-950 text-ink-100">
       <SiteHeader locale={locale} dict={dict} user={user} />
 
-      <main className="container-page space-y-6 py-6">
-        {/* cinema header: poster thumb + title + position */}
-        <div className="flex items-center gap-4">
+      <main className="container-page space-y-8 py-6">
+        {/* 1) مسار التنقل */}
+        <nav aria-label="breadcrumb" className="flex flex-wrap items-center gap-1.5 text-sm">
+          <Link href={`/title/${title.slug}`} className="font-bold text-brand-400 hover:underline">
+            {seriesName}
+          </Link>
+          <span aria-hidden className="text-ink-600">
+            ←
+          </span>
+          <span className="text-ink-300">
+            {season.name || `${dict.common.seasonOf} ${seasonNumber}`}
+          </span>
+          <span aria-hidden className="text-ink-600">
+            ←
+          </span>
+          <span className="tabular font-bold text-white">
+            {episode.name || `${dict.common.episode} ${episodeNumber}`}
+          </span>
+        </nav>
+
+        {/* 2+3+4) المشغّل + السيرفرات + التحميل + البلاغ */}
+        <EpisodeView
+          episodeId={episode.id}
+          servers={servers}
+          nextHref={nextHref}
+          locale={locale}
+          startAt={resumable ? startAt : 0}
+          signedIn={Boolean(user)}
+          labels={{
+            servers: dict.watch.servers,
+            downloads: dict.watch.downloads,
+            autoplay: dict.watch.autoplay,
+            showDead: dict.watch.showDead,
+            hideDead: dict.watch.hideDead,
+            report: dict.watch.report,
+            reportTitle: dict.watch.reportTitle,
+            reportSent: dict.watch.reportSent,
+            reportFailed: dict.watch.reportFailed,
+            retry: dict.common.retry,
+            noServers: dict.watch.noServers,
+            allDead: dict.watch.allDead,
+            recheckAt: dict.watch.recheckAt,
+            needsRefresh: dict.watch.needsRefresh,
+            requestRefresh: dict.watch.requestRefresh,
+            refreshQueued: dict.watch.refreshQueued,
+            download: dict.watch.downloadNow,
+            openPlayer: dict.watch.title,
+            unavailable: dict.watch.unavailable,
+            host: dict.watch.colHost,
+            quality: dict.watch.colQuality,
+            size: dict.watch.colSize,
+            source: dict.watch.colSource,
+            status: dict.watch.colStatus,
+            action: dict.watch.colAction,
+            all: dict.browse.all,
+          }}
+          reportLabels={{
+            deadVideo: dict.watch.repDeadVideo,
+            audio: dict.watch.repAudio,
+            subtitle: dict.watch.repSubtitle,
+          }}
+        />
+
+        {/* 5) سابق/تالي + قائمة حلقات الموسم */}
+        <section className="card space-y-4 p-4 !bg-ink-900 dark:!border-ink-800">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="flex items-center gap-2 font-black">
+              <span
+                aria-hidden
+                className="h-6 w-1.5 rounded-full bg-gradient-to-b from-brand-400 to-brand-700"
+              />
+              {dict.detail.episodes}
+              <span className="tabular text-sm font-normal text-ink-500">{season.episodes.length}</span>
+            </h2>
+            <div className="flex gap-2">
+              {prev ? (
+                <Link
+                  href={`/watch/${title.slug}/${prev.season}/${prev.number}`}
+                  className="rounded-xl border border-ink-700 px-4 py-2 text-xs font-bold transition hover:bg-ink-800"
+                >
+                  {dict.watch.previousEpisode}
+                </Link>
+              ) : (
+                <span />
+              )}
+              {next ? (
+                <Link
+                  href={`/watch/${title.slug}/${next.season}/${next.number}`}
+                  className="rounded-xl bg-brand-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-brand-500"
+                >
+                  {dict.watch.nextEpisode}
+                </Link>
+              ) : (
+                <span />
+              )}
+            </div>
+          </div>
+          <ul className="grid max-h-80 grid-cols-4 gap-2 overflow-y-auto sm:grid-cols-6 lg:grid-cols-8">
+            {season.episodes.map((e) => {
+              const active = e.number === episodeNumber;
+              const seen = watchedEpisodes.has(e.number);
+              const live = e.sources.some((s) => !s.isDead);
+              return (
+                <li key={e.id}>
+                  <Link
+                    href={`/watch/${title.slug}/${seasonNumber}/${e.number}`}
+                    aria-current={active ? 'true' : undefined}
+                    title={e.name || `${dict.common.episode} ${e.number}`}
+                    className={
+                      active
+                        ? 'tabular block rounded-xl bg-brand-600 py-3 text-center text-sm font-black text-white shadow-card'
+                        : seen
+                          ? 'tabular block rounded-xl border border-brand-800 bg-brand-950 py-3 text-center text-sm text-brand-300 transition hover:bg-brand-900'
+                          : live
+                            ? 'tabular block rounded-xl border border-ink-700 py-3 text-center text-sm text-ink-300 transition hover:border-brand-600 hover:text-white'
+                            : 'tabular block rounded-xl border border-ink-800 py-3 text-center text-sm text-ink-600'
+                    }
+                  >
+                    {e.number}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+
+        {/* 6) بطاقة معلومات السلسلة */}
+        <section className="card flex gap-4 p-4 !bg-ink-900 dark:!border-ink-800 sm:p-5">
           {title.posterUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={`/api/img?url=${encodeURIComponent(title.posterUrl)}&w=160&q=60`}
+              src={`/api/img?url=${encodeURIComponent(title.posterUrl)}&w=240&q=60`}
               alt=""
-              className="h-20 w-14 shrink-0 rounded-xl object-cover shadow-card"
+              className="h-36 w-24 shrink-0 rounded-xl object-cover"
             />
           ) : null}
-          <div className="min-w-0 flex-1">
-            <Link
-              href={`/title/${title.slug}`}
-              className="truncate text-lg font-black tracking-tight hover:text-brand-400 sm:text-2xl"
-            >
-              {title.titleAr || title.originalTitle}
+          <div className="min-w-0 space-y-2">
+            <Link href={`/title/${title.slug}`} className="text-lg font-black hover:text-brand-400">
+              {seriesName}
             </Link>
-            <p className="tabular mt-0.5 text-sm text-ink-400">
-              {dict.common.seasonOf} {seasonNumber} · {dict.common.episode} {episodeNumber}
-              {episode.name ? ` — ${episode.name}` : ''}
+            <ul className="flex flex-wrap gap-2 text-[11px] font-bold">
+              <li className="rounded-full bg-ink-800 px-2.5 py-1">
+                {dict.browse.types[title.type] ?? title.type}
+              </li>
+              <li
+                className={`rounded-full px-2.5 py-1 text-white ${title.isOngoing ? 'bg-brand-600' : 'bg-ink-600'}`}
+              >
+                {title.isOngoing ? dict.detail.ongoing : dict.detail.ended}
+              </li>
+              {typeof title.rating === 'number' ? (
+                <li className="tabular rounded-full bg-ink-800 px-2.5 py-1 text-amber-400">
+                  ★ {title.rating.toFixed(1)}
+                </li>
+              ) : null}
+            </ul>
+            <p className="line-clamp-3 text-sm leading-relaxed text-ink-400">
+              {title.overview || dict.detail.noOverview}
             </p>
           </div>
-          <Link
-            href={`/title/${title.slug}`}
-            className="shrink-0 rounded-xl border border-ink-700 px-3 py-1.5 text-sm text-ink-300 transition hover:bg-ink-800"
-          >
-            {dict.watch.backToDetail}
-          </Link>
-        </div>
-
-        {/* cinema frame */}
-        <div className="overflow-hidden rounded-3xl border border-ink-800 bg-black shadow-card">
-          <VideoPlayer
-            startAt={resumable ? startAt : 0}
-            episodeId={user ? episode.id : undefined}
-            signedIn={Boolean(user)}
-            sources={episode.sources.map((s) => ({
-              id: s.id,
-              provider: s.provider,
-              name: s.name,
-              url: s.url,
-              streamUrl: s.streamUrl,
-              kind: s.kind,
-              quality: s.quality,
-              language: s.language,
-            }))}
-            labels={{
-              unavailable: dict.watch.unavailable,
-              openSource: dict.watch.openSource,
-              noStreams: dict.common.noStreams,
-            }}
-          />
-        </div>
-
-        <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
-          {/* episodes rail */}
-          <section className="card space-y-3 p-4 !bg-ink-900 dark:!border-ink-800">
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-bold uppercase tracking-wide text-ink-400">
-                {dict.detail.episodes}
-              </h2>
-              <div className="flex gap-2">
-                {prev ? (
-                  <Link
-                    href={`/watch/${title.slug}/${prev.season}/${prev.number}`}
-                    className="rounded-lg border border-ink-700 px-3 py-1.5 text-xs transition hover:bg-ink-800"
-                  >
-                    {dict.watch.previousEpisode}
-                  </Link>
-                ) : null}
-                {next ? (
-                  <Link
-                    href={`/watch/${title.slug}/${next.season}/${next.number}`}
-                    className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-brand-500"
-                  >
-                    {dict.watch.nextEpisode}
-                  </Link>
-                ) : null}
-              </div>
-            </div>
-            <ul className="grid max-h-72 grid-cols-5 gap-2 overflow-y-auto sm:grid-cols-8 lg:grid-cols-6">
-              {season.episodes.map((e) => {
-                const active = e.number === episodeNumber;
-                const seen = watchedEpisodes.has(e.number);
-                const playable = e.sources.length > 0;
-                return (
-                  <li key={e.id}>
-                    <Link
-                      href={`/watch/${title.slug}/${seasonNumber}/${e.number}`}
-                      aria-current={active ? 'true' : undefined}
-                      className={
-                        active
-                          ? 'tabular block rounded-xl bg-brand-600 py-2.5 text-center text-sm font-black text-white shadow-card'
-                          : seen
-                            ? 'tabular block rounded-xl border border-brand-800 bg-brand-950 py-2.5 text-center text-sm text-brand-300 transition hover:bg-brand-900'
-                            : playable
-                              ? 'tabular block rounded-xl border border-ink-700 py-2.5 text-center text-sm text-ink-300 transition hover:border-brand-600 hover:text-white'
-                              : 'tabular block rounded-xl border border-ink-800 py-2.5 text-center text-sm text-ink-600'
-                      }
-                    >
-                      {e.number}
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-            {user && watchedEpisodes.size > 0 ? (
-              <p className="text-xs text-ink-500 dark:text-ink-400">
-                {dict.detail.continueWatching}:{' '}
-                {[...watchedEpisodes]
-                  .sort((a, b) => a - b)
-                  .map((n) => `E${n}`)
-                  .join(' · ')}
-              </p>
-            ) : null}
-          </section>
-
-          {/* side info */}
-          <aside className="h-fit space-y-4">
-            <div className="card space-y-3 p-4 !bg-ink-900 dark:!border-ink-800">
-              <h2 className="text-sm font-bold uppercase tracking-wide text-ink-400">
-                {dict.detail.overview}
-              </h2>
-              <p className="line-clamp-6 text-sm leading-relaxed text-ink-300">
-                {title.overview || dict.detail.noOverview}
-              </p>
-              <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-400">
-                {title.releaseYear ? <li className="tabular">{title.releaseYear}</li> : null}
-                {typeof title.rating === 'number' ? (
-                  <li className="tabular font-bold text-amber-400">★ {title.rating.toFixed(1)}</li>
-                ) : null}
-                <li>{dict.browse.types[title.type] ?? title.type}</li>
-                <li>{dict.detail.sourceCount(episode.sources.length)}</li>
-              </ul>
-            </div>
-
-            <div className="card space-y-3 p-4 !bg-ink-900 dark:!border-ink-800">
-              <h2 className="text-sm font-bold uppercase tracking-wide text-ink-400">
-                {locale === 'ar' ? 'مصادر هذه الحلقة' : 'Episode sources'}
-              </h2>
-              <ul className="space-y-2">
-                {episode.sources.map((s) => (
-                  <li
-                    key={s.id}
-                    className="flex items-center justify-between gap-2 rounded-lg border border-ink-800 px-2.5 py-1.5 text-xs"
-                  >
-                    <span className="min-w-0">
-                      <span className="block truncate font-bold text-ink-200">
-                        {s.name || s.provider}
-                      </span>
-                      <span className="tabular block truncate text-ink-500" dir="ltr">
-                        {hostOf(s.streamUrl || s.url)}
-                        {s.quality ? ` · ${s.quality}` : ''}
-                      </span>
-                    </span>
-                    <span className="shrink-0 rounded-full bg-emerald-500/15 px-2 py-0.5 font-bold text-emerald-400">
-                      {locale === 'ar' ? 'نشط' : 'active'}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-              <p className="text-[11px] leading-relaxed text-ink-500">
-                {locale === 'ar'
-                  ? 'كل المصادر تعمل داخل الموقع — لا تحويل لمواقع خارجية.'
-                  : 'All sources play inside this site — no external redirects.'}
-              </p>
-            </div>
-          </aside>
-        </div>
+        </section>
       </main>
 
       <SiteFooter dict={dict} />

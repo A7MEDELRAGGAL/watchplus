@@ -13,6 +13,16 @@
 import assert from 'node:assert/strict';
 import { parseRobots, patternToRegex } from '../src/lib/scraper/core/robots';
 import { slugify, extractYear, extractRuntime, isArabic } from '../src/lib/scraper/core/html';
+import {
+  classify,
+  sortServers,
+  filterServers,
+  pickDefault,
+  isExpiringLink,
+  isDownloadable,
+  isReportCategory,
+  type ServerRow,
+} from '../src/lib/servers';
 
 /**
  * Applies one robots.txt to a path the way the crawler does, but without
@@ -203,6 +213,99 @@ for (const [robots, path, expected, description] of cases) {
   assert.equal(isArabic('حرب العروبة'), true);
   assert.equal(isArabic('Attack on Titan'), false);
   assert.equal(isArabic('Naruto ナルト'), false);
+  passed += 1;
+}
+
+// ── servers: acceptance 1, 2, 4 ──────────────────────────────────────────
+const mkRow = (over: Partial<ServerRow> & { id: string }): ServerRow => ({
+  provider: 'witanime',
+  label: null,
+  quality: null,
+  kind: 'iframe',
+  url: 'https://x.test/e/1',
+  streamUrl: null,
+  isDead: false,
+  fails: 0,
+  checkedAt: null,
+  ...over,
+});
+
+{
+  // 1: الترتيب active ← suspect والجودة/المصدر واضحان
+  const rows = [
+    mkRow({ id: 'd', isDead: true }),
+    mkRow({ id: 's', fails: 2, provider: 'animerco', quality: '720p' }),
+    mkRow({ id: 'a', provider: 'witanime', quality: '1080p' }),
+  ].map(classify);
+  assert.deepEqual(sortServers(rows).map((r) => r.id), ['a', 's', 'd']);
+  assert.equal(rows.find((r) => r.id === 'a')!.status, 'active');
+  assert.equal(rows.find((r) => r.id === 's')!.status, 'suspect');
+  passed += 1;
+}
+
+{
+  // 2: فلترة الجودة والموقع تعمل على stream وdownload
+  const rows = [
+    mkRow({ id: 'a', quality: '1080p', provider: 'witanime', kind: 'mp4', streamUrl: 'https://x.test/f.mp4' }),
+    mkRow({ id: 'b', quality: '720p', provider: 'animerco' }),
+    mkRow({ id: 'c', quality: null, provider: 'witanime' }),
+  ].map(classify);
+  assert.deepEqual(
+    filterServers(rows, { quality: '1080p', site: null, showDead: false }).map((r) => r.id),
+    ['a'],
+  );
+  assert.deepEqual(
+    filterServers(rows, { quality: null, site: 'witanime', showDead: false }).map((r) => r.id),
+    ['a', 'c'],
+  );
+  passed += 1;
+}
+
+{
+  // 3 (منطق الاختيار): الافتراضي active ثم suspect، والمنتهي/الميت ليس صالحًا
+  const rows = [
+    mkRow({ id: 'x', url: 'https://x.test/e?expires=99', streamUrl: null }),
+    mkRow({ id: 's', fails: 1 }),
+    mkRow({ id: 'a' }),
+  ].map(classify);
+  assert.equal(pickDefault(rows)!.id, 'a');
+  assert.equal(pickDefault(rows.filter((r) => r.id !== 'a'))!.id, 's');
+  assert.equal(pickDefault([rows[0]]), null);
+  passed += 1;
+}
+
+{
+  // 4: dead مخفي افتراضيًا + suspect مميز (status يحمله)
+  const rows = [mkRow({ id: 'd', isDead: true }), mkRow({ id: 's', fails: 1 })].map(classify);
+  assert.deepEqual(
+    filterServers(rows, { quality: null, site: null, showDead: false }).map((r) => r.id),
+    ['s'],
+  );
+  assert.deepEqual(
+    filterServers(sortServers(rows), { quality: null, site: null, showDead: true }).map((r) => r.id),
+    ['s', 'd'],
+  );
+  passed += 1;
+}
+
+{
+  // 5: المنتهي ليس صالحًا + mp4 المباشر قابل للتحميل
+  assert.equal(isExpiringLink('https://x.test/f.mp4?expires=123&token=abc'), true);
+  assert.equal(isExpiringLink('https://x.test/embed/1'), false);
+  const dl = classify(mkRow({ id: 'm', kind: 'mp4', streamUrl: 'https://x.test/f.mp4' }));
+  assert.equal(isDownloadable({ kind: 'mp4', streamUrl: 'https://x.test/f.mp4' }), true);
+  assert.equal(dl.isDownload, true);
+  assert.equal(isDownloadable({ kind: 'iframe', streamUrl: null }), false);
+  passed += 1;
+}
+
+{
+  // 6: فئات البلاغ الثلاث فقط تُقبل
+  assert.equal(isReportCategory('dead-video'), true);
+  assert.equal(isReportCategory('audio'), true);
+  assert.equal(isReportCategory('subtitle'), true);
+  assert.equal(isReportCategory('other'), false);
+  assert.equal(isReportCategory(undefined), false);
   passed += 1;
 }
 

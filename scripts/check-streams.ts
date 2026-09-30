@@ -97,13 +97,22 @@ async function main() {
   const where = includeDead
     ? { OR: [{ isDead: false }, { isDead: true, lastSyncedAt: { lt: staleBefore } }] }
     : { isDead: false };
-  const sources = await prisma.episodeSource.findMany({
-    where,
-    select: { id: true, url: true, streamUrl: true, provider: true, headers: true, isDead: true },
+  const select = { id: true, url: true, streamUrl: true, provider: true, headers: true, isDead: true } as const;
+  // البلاغات أولًا (المستخدمون يساعدون التنظيف) ثم الأقدم فحصًا
+  const reported = await prisma.episodeSource.findMany({
+    where: { ...where, headers: { contains: '"reports"' } },
+    select,
     orderBy: { lastSyncedAt: 'asc' },
-    ...(limit ? { take: limit } : {}),
+    take: 200,
   });
-  console.log(`checking ${sources.length} sources (include-dead=${includeDead})…`);
+  const rest = await prisma.episodeSource.findMany({
+    where: { ...where, NOT: { id: { in: reported.map((r) => r.id) } } },
+    select,
+    orderBy: { lastSyncedAt: 'asc' },
+    ...(limit ? { take: Math.max(0, limit - reported.length) } : {}),
+  });
+  const sources = [...reported, ...rest];
+  console.log(`checking ${sources.length} sources (${reported.length} reported first, include-dead=${includeDead})…`);
 
   let dead = 0;
   let resurrected = 0;

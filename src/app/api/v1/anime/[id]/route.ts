@@ -31,7 +31,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
           number: s.number,
           name: s.name,
           episodeCount: s.episodes.length,
-          playableCount: s.episodes.filter((e) => e.sources.length > 0).length,
+          playableCount: s.episodes.filter((e) => e.sources.some((x) => !x.isDead)).length,
         })),
       },
     },

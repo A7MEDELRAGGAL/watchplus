@@ -259,7 +259,7 @@ export async function getTitleBySlug(slug: string) {
     runtime: true,
     airDate: true,
     sources: {
-      where: { isDead: false },
+      // كل الحالات (active/suspect/dead) — الصفحة ترتب وتخفي الميت خلف زر
       select: {
         id: true,
         provider: true,
@@ -269,6 +269,9 @@ export async function getTitleBySlug(slug: string) {
         kind: true,
         quality: true,
         language: true,
+        isDead: true,
+        headers: true,
+        lastSyncedAt: true,
       },
     },
   } as const;
@@ -329,11 +332,20 @@ export async function getTitleBySlug(slug: string) {
     studios: fromJsonText<Studio[]>(title.studios, []),
     countries: fromJsonText<{ name: string }[]>(title.countries, []),
     episodeCount: episodes.length,
-    playableCount: episodes.filter((e) => e.sources.length > 0).length,
+    playableCount: liveCount(episodes),
   };
 }
 
 export type TitleDetailData = NonNullable<Awaited<ReturnType<typeof getTitleBySlug>>>;
+
+/** حلقة "قابلة للتشغيل" = فيها سيرفر واحد حي على الأقل (الميت لا يُحتسب). */
+export function hasLive(ep: { sources: { isDead: boolean }[] }): boolean {
+  return ep.sources.some((s) => !s.isDead);
+}
+
+export function liveCount(eps: { sources: { isDead: boolean }[] }[]): number {
+  return eps.filter(hasLive).length;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Series linking — seasons & editions of one show stay separate rows (no forced
@@ -375,12 +387,22 @@ export function seasonRank(title: string): number {
 export async function getRelatedTitles(id: string, originalTitle: string) {
   const key = seriesKey(originalTitle);
   if (key.length < 3) return [];
+  const head2 = (k: string) => k.split(' ').slice(0, 2).join(' ');
+  const h2 = head2(key);
   const all = await prisma.title.findMany({
     where: { status: 'PUBLISHED' },
     select: { ...TITLE_SELECT, id: true },
   });
   return all
-    .filter((t) => t.id !== id && seriesKey(t.originalTitle) === key)
+    .filter((t) => {
+      if (t.id === id) return false;
+      const k = seriesKey(t.originalTitle);
+      if (k === key) return true;
+      // تتابع باسم مختلف ("Naruto" ← "Naruto Shippuuden"): بادئة أو أول كلمتين — للربط لا الدمج
+      if (k.startsWith(`${key} `) || key.startsWith(`${k} `)) return true;
+      const words = k.split(' ');
+      return words.length >= 2 && h2.length >= 3 && head2(k) === h2;
+    })
     .sort((a, b) => seasonRank(a.originalTitle) - seasonRank(b.originalTitle))
     .slice(0, 12);
 }

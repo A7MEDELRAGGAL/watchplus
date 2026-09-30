@@ -8,7 +8,7 @@ import { getDictionary, intlLocale } from '@/lib/i18n/config';
 import { getLocale } from '@/lib/i18n/server';
 import { getSessionUser } from '@/lib/auth';
 import { isInLibrary } from '@/lib/library';
-import { displayTitle, getTitleBySlug, canonicalSlug, getRelatedTitles } from '@/lib/queries';
+import { displayTitle, getTitleBySlug, canonicalSlug, getRelatedTitles, hasLive } from '@/lib/queries';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,7 +42,7 @@ export default async function TitlePage({ params }: { params: { slug: string } }
 
   const name = displayTitle(title, locale);
   const firstPlayable =
-    title.seasons.flatMap((s) => s.episodes).find((e) => e.sources.length > 0) ?? null;
+    title.seasons.flatMap((s) => s.episodes).find((e) => hasLive(e)) ?? null;
 
   // Both flags in one round trip each, and only when there is a user to own them.
   const [inFavorites, inWatchlist, related] = await Promise.all([
@@ -316,7 +316,8 @@ function Episodes({
 
           <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {season.episodes.map((ep) => {
-              const playable = ep.sources.length > 0;
+              const live = ep.sources.filter((s) => !s.isDead);
+              const playable = live.length > 0;
               const inner = (
                 <>
                   <div className="relative aspect-video w-32 shrink-0 overflow-hidden rounded-lg bg-ink-200 dark:bg-ink-800">
@@ -337,9 +338,9 @@ function Episodes({
                     <p className="truncate text-sm font-medium">
                       {ep.name || `Episode ${ep.number}`}
                     </p>
-                    <p className="text-xs text-ink-500 dark:text-ink-400">
-                      {playable ? dict.detail.sourceCount(ep.sources.length) : dict.detail.notAired}
-                    </p>
+                      <p className="text-xs text-ink-500 dark:text-ink-400">
+                        {playable ? dict.detail.sourceCount(live.length) : dict.detail.notAired}
+                      </p>
                   </div>
                 </>
               );
