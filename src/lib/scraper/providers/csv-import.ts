@@ -28,6 +28,7 @@ import type {
   StreamLink,
   TitleDetail,
 } from '../types';
+import { cleanTitle, isJunkTitle, titleFromUrlSlug } from '../normalize';
 
 interface CsvRow {
   source: string;
@@ -117,6 +118,14 @@ function slugOf(animeUrl: string): string {
     .replace(/[^a-z0-9\u0600-\u06FF]+/gi, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 80);
+}
+
+/** اسم العرض كما يظهر: المختلط يُنظَّف، والزائف يُستبدل بالمشتق من الرابط. */
+function shownTitle(animeUrl: string, raw: string): string {
+  const t = (raw || '').trim();
+  const cleaned = cleanTitle(t);
+  if (!isJunkTitle(cleaned)) return cleaned || animeUrl;
+  return titleFromUrlSlug(animeUrl) || cleaned || animeUrl;
 }
 
 function hostLabel(url: string): string {
@@ -209,7 +218,9 @@ function buildDetail(animeUrl: string, rows: CsvRow[]): TitleDetail | null {
   const first = rows[0];
   const site = (first.source || 'unknown').trim() || 'unknown';
   const providerId = `${site}:${slugOf(animeUrl)}`;
-  const title = (first.title || '').trim() || providerId;
+  const rawTitle = (first.title || '').trim();
+  // عناوين animhq الزائفة ("الموسم 1 - الحلقة 1"): الاسم الحقيقي في الرابط.
+  const title = shownTitle(animeUrl, rawTitle) || providerId;
   const poster = rows.map((r) => r.img).find((u) => u) || undefined;
   const isMovie = rows.every((r) => (r.kind || '').trim() === 'movie');
 
@@ -231,7 +242,8 @@ function buildDetail(animeUrl: string, rows: CsvRow[]): TitleDetail | null {
       number: num,
       name: eps.map((e) => e.label).find((l) => l) || undefined,
       overview: undefined,
-      stillUrl: eps.map((e) => e.img).find((u) => u) || undefined,
+      // صورة الصف أولًا، ثم بوستر العمل بدل الفراغ الرمادي (MAL لاحقًا إن توفرت)
+      stillUrl: eps.map((e) => e.img).find((u) => u) || poster || undefined,
       runtime: undefined,
       airDate: undefined,
       streams: streamsFor(eps, site),
@@ -296,7 +308,7 @@ export const csvImportProvider: Provider = {
       const rows = groups.get(animeUrl) ?? [];
       const first = rows[0];
       const site = (first.source || 'unknown').trim() || 'unknown';
-      const title = (first.title || '').trim() || animeUrl;
+      const title = shownTitle(animeUrl, first.title || '');
       const isMovie = rows.every((r) => (r.kind || '').trim() === 'movie');
       return {
         providerId: `${site}:${slugOf(animeUrl)}`,
@@ -325,7 +337,8 @@ export const csvImportProvider: Provider = {
     const groups = loadGroups(defaultCsvPath());
     const out: DiscoveredItem[] = [];
     for (const [animeUrl, rows] of groups) {
-      const title = (rows[0]?.title || '').trim();
+      const raw = (rows[0]?.title || '').trim();
+      const title = shownTitle(animeUrl, raw);
       if (!title.toLowerCase().includes(q)) continue;
       const site = ((rows[0]?.source || 'unknown').trim() || 'unknown');
       const isMovie = rows.every((r) => (r.kind || '').trim() === 'movie');

@@ -230,6 +230,87 @@ export function shortHash(input: string): string {
   return h.toString(36).slice(0, 5);
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Junk-title repair
+//
+// بعض المصادر (مثل animhq في الـ CSV) تضع label الحلقة ("الموسم 1 - الحلقة 1")
+// في حقل العنوان، والاسم الحقيقي موجود فقط في آخر رابط صفحة العمل
+// (…/serie/akame-ga-kill/). هذه الدوال تكشف الزائف وتشتق اسمًا مقروءًا من
+// الرابط، فيُستخدم في الاستيراد الجديد وفي سكربت backfill للصفوف القديمة.
+// السلاج لا يتغير أبدًا — الروابط القديمة تظل سليمة.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** كلمات لا تصنع عنوانًا وحدها: مواسم/حلقات/أنواع. */
+const JUNK_WORDS =
+  /^(الموسم|موسم|الحلقة|حلقة|حلقات|مسلسل|فيلم|خاصة|اسبشل|سبيشل|special|tv|anime|season|episode|ep|أونا|اونا|أوفا|اوفا|الجزء|جزء|الموسم|انمي|الأنمي|تلفزيونية|مدبلج|مترجم|مترجمة|كامل|جميع|الحلقات|اونلاين)$/i;
+
+/** علامات label-الحلقة: وجودها مع بقايا اسم يعني العنوان مختلط يحتاج تنظيفًا. */
+const EP_MARKERS = /(حلقة|الحلقة|موسم|الموسم)/;
+
+/** كلمات تُحذف عند التنظيف (أوسع من JUNK_WORDS: رتب + صيغ + جودات). */
+const CLEAN_WORDS =
+  /^(انمي|anime|special|tv|ova|ona|season|episode|ep|مترجمة|مترجم|مدبلجة|مدبلج|hd|حل|الحل|حلقة|الحلقة|حلقات|موسم|الموسم|مسلسل|فيلم|خاصة|اسبشل|سبيشل|أونا|اونا|أوفا|اوفا|جزء|الجزء|الأول|الاول|الثاني|الثانى|الثالث|الرابع|الخامس|السادس|السابع|الثامن|التاسع|العاشر|العاشرة|الأخيرة|الاخيرة|كامل|كاملة|جميع|اونلاين|انمى|الأنمي|انمي)$/i;
+
+const GENERIC_TITLES = new Set([
+  'حلقات الأنمي الخاصة',
+  'حلقات خاصة تلفزيونية',
+  'عروض خاصة',
+  'حلقة خاصة',
+]);
+
+/** true عندما لا يحمل النص اسم عمل حقيقي (label حلقة تائه في حقل العنوان). */
+export function isJunkTitle(title: string): boolean {
+  const t = (title || '').trim();
+  if (!t) return true;
+  if (GENERIC_TITLES.has(t)) return true;
+  const rest = t
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .split(/\s+/)
+    .filter((w) => w && !/^\d+$/.test(w) && !JUNK_WORDS.test(w));
+  return rest.join(' ').trim().length < 3;
+}
+
+/**
+ * "انمي المحقق كونان Detective Conan الحلقة 1215 مترجمة HD"
+ * → "المحقق كونان Detective Conan".
+ * يعمل فقط عند وجود علامة label-حلقة، وإلا يرجع الأصل (حتى لا تُمس
+ * عناوين شرعية فيها "Season 3" أو "Part 2").
+ */
+export function cleanTitle(title: string): string {
+  const t = (title || '').trim();
+  if (!t || !EP_MARKERS.test(t)) return t;
+  const rest = t
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .split(/\s+/)
+    .filter((w) => w && !/^\d+$/.test(w) && !CLEAN_WORDS.test(w))
+    .join(' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  return rest.length >= 3 ? rest : t;
+}
+
+/** `…/serie/akame-ga-kill/` → `Akame Ga Kill`. للسلاجات العربية يرجعها كما هي. */
+export function titleFromUrlSlug(url: string): string | null {
+  try {
+    const clean = url.split('?')[0].replace(/\/+$/, '');
+    const tail = clean.split('/').pop() || '';
+    const words = tail
+      .replace(/[-_]+/g, ' ')
+      .split(/\s+/)
+      .filter(Boolean)
+      .filter((w) => !/^(s\d+|season\d*|part\d*|movie)$/i.test(w));
+    if (!words.length) return null;
+    const pretty = words
+      .map((w) =>
+        /[\u0600-\u06FF]/.test(w) ? w : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase(),
+      )
+      .join(' ');
+    return pretty.length >= 3 ? pretty : null;
+  } catch {
+    return null;
+  }
+}
+
 function toDate(value?: string | null): Date | null {
   if (!value) return null;
   const d = new Date(value);
