@@ -154,10 +154,36 @@ export async function upsertTitle(
       : data.seasons;
 
   if (seasons.length) {
+    // العقد: سجل السيرفر لا يُحذف أبدًا. قبل الاستبدال الشامل نلتقط السيرفرات
+    // الحية، وبعده نعيد تثبيت ما سقط من البيانات الجديدة (حلقات اختفت من
+    // المصدر لكن روابطها شغالة تظل موجودة بدل أن تتبخر).
+    const preserved = existing
+      ? await prisma.episode.findMany({
+          where: {
+            season: { titleId: title.id },
+            sources: { some: { isDead: false } },
+          },
+          select: {
+            number: true,
+            name: true,
+            season: { select: { number: true } },
+            sources: {
+              where: { isDead: false },
+              select: {
+                provider: true, providerId: true, url: true, streamUrl: true,
+                kind: true, name: true, quality: true, language: true, headers: true,
+              },
+            },
+          },
+        })
+      : [];
+
     await prisma.season.deleteMany({ where: { titleId: title.id } });
     for (const season of seasons) {
       await writeSeason(prisma, title.id, season, provider);
     }
+
+    if (preserved.length) await reattachPreserved(title.id, preserved);
   }
 
   if (existing) stats.updated += 1;
@@ -177,6 +203,84 @@ function movieAsEpisode(data: NormalizedTitle): NormalizedEpisode {
     durationS: data.runtimeMin ? data.runtimeMin * 60 : null,
     streams: data.movieStreams,
   };
+}
+
+type PreservedEpisode = {
+  number: number;
+  name: string | null;
+  season: { number: number };
+  sources: {
+    provider: string;
+    providerId: string;
+    url: string;
+    streamUrl: string | null;
+    kind: string;
+    name: string | null;
+    quality: string | null;
+    language: string;
+    headers: string | null;
+  }[];
+};
+
+/**
+ * يعيد تثبيت السيرفرات الحية التي أسقطتها البيانات الجديدة: نفس الخانة
+ * (موسم/حلقة) تُدمج سيرفراتها، والخانة الغائبة تُعاد مع سيرفراتها (ملء فراغ).
+ */
+async function reattachPreserved(titleId: string, preserved: PreservedEpisode[]) {
+  const fresh = await prisma.season.findMany({
+    where: { titleId },
+    select: {
+      id: true,
+      number: true,
+      episodes: {
+        select: {
+          id: true,
+          number: true,
+          sources: { select: { provider: true, providerId: true } },
+        },
+      },
+    },
+  });
+  const seasonByNum = new Map(fresh.map((s) => [s.number, s]));
+
+  for (const old of preserved) {
+    let season = seasonByNum.get(old.season.number);
+    if (!season) {
+      season = await prisma.season.create({
+        data: { titleId, number: old.season.number, name: `Season ${old.season.number}` },
+        select: { id: true, number: true, episodes: { select: { id: true, number: true, sources: { select: { provider: true, providerId: true } } } } },
+      });
+      seasonByNum.set(season.number, season);
+    }
+    let ep = season.episodes.find((e) => e.number === old.number);
+    if (!ep) {
+      ep = await prisma.episode.create({
+        data: { seasonId: season.id, number: old.number, name: old.name },
+        select: { id: true, number: true, sources: { select: { provider: true, providerId: true } } },
+      });
+      season.episodes.push(ep);
+    }
+    const have = new Set(ep.sources.map((s) => `${s.provider}:${s.providerId}`));
+    for (const src of old.sources) {
+      if (have.has(`${src.provider}:${src.providerId}`)) continue;
+      await prisma.episodeSource.create({
+        data: {
+          episodeId: ep.id,
+          provider: src.provider,
+          providerId: src.providerId,
+          url: src.url,
+          streamUrl: src.streamUrl,
+          kind: src.kind,
+          name: src.name,
+          quality: src.quality,
+          language: src.language,
+          headers: src.headers,
+          isDead: false,
+        },
+      });
+      have.add(`${src.provider}:${src.providerId}`);
+    }
+  }
 }
 
 /**

@@ -8,7 +8,7 @@ import { getDictionary, intlLocale } from '@/lib/i18n/config';
 import { getLocale } from '@/lib/i18n/server';
 import { getSessionUser } from '@/lib/auth';
 import { isInLibrary } from '@/lib/library';
-import { displayTitle, getTitleBySlug, canonicalSlug } from '@/lib/queries';
+import { displayTitle, getTitleBySlug, canonicalSlug, getRelatedTitles } from '@/lib/queries';
 
 export const dynamic = 'force-dynamic';
 
@@ -45,12 +45,11 @@ export default async function TitlePage({ params }: { params: { slug: string } }
     title.seasons.flatMap((s) => s.episodes).find((e) => e.sources.length > 0) ?? null;
 
   // Both flags in one round trip each, and only when there is a user to own them.
-  const [inFavorites, inWatchlist] = user
-    ? await Promise.all([
-        isInLibrary('favorites', user.id, title.id),
-        isInLibrary('watchlist', user.id, title.id),
-      ])
-    : [false, false];
+  const [inFavorites, inWatchlist, related] = await Promise.all([
+    user ? isInLibrary('favorites', user.id, title.id) : Promise.resolve(false),
+    user ? isInLibrary('watchlist', user.id, title.id) : Promise.resolve(false),
+    getRelatedTitles(title.id, title.originalTitle),
+  ]);
 
   return (
     <div className="min-h-dvh">
@@ -243,6 +242,40 @@ export default async function TitlePage({ params }: { params: { slug: string } }
         </section>
 
         <Episodes title={title} dict={dict} />
+
+        {related.length > 0 ? (
+          <section className="space-y-3">
+            <h2 className="flex items-center gap-2 text-lg font-black tracking-tight">
+              <span
+                aria-hidden
+                className="h-6 w-1.5 rounded-full bg-gradient-to-b from-brand-400 to-brand-700"
+              />
+              {locale === 'ar' ? 'مواسم وإصدارات مرتبطة' : 'Related seasons & releases'}
+            </h2>
+            <ul className="flex gap-3 overflow-x-auto pb-2">
+              {related.map((r) => (
+                <li key={r.id} className="w-32 shrink-0">
+                  <Link href={`/title/${r.slug}`} className="group block">
+                    <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-ink-200 dark:bg-ink-800">
+                      {r.posterUrl ? (
+                        <Image
+                          src={r.posterUrl}
+                          alt=""
+                          fill
+                          sizes="128px"
+                          className="object-cover transition duration-300 group-hover:scale-105"
+                        />
+                      ) : null}
+                    </div>
+                    <p className="mt-1.5 line-clamp-2 text-xs font-bold group-hover:text-brand-500">
+                      {displayTitle(r, locale)}
+                    </p>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
       </main>
 
       <SiteFooter dict={dict} />

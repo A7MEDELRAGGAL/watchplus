@@ -1,0 +1,40 @@
+import { NextResponse } from 'next/server';
+import { getTitleBySlug, displayTitle, seriesKey } from '@/lib/queries';
+import { isLocale } from '@/lib/i18n/config';
+
+export const dynamic = 'force-dynamic';
+
+/** GET /api/v1/anime/{id} — تفاصيل عمل (id أو slug) مع إصداراته المرتبطة. */
+export async function GET(request: Request, { params }: { params: { id: string } }) {
+  const url = new URL(request.url);
+  const locale = isLocale(url.searchParams.get('locale')) ? url.searchParams.get('locale')! : 'ar';
+  const t = await getTitleBySlug(params.id);
+  if (!t) return NextResponse.json({ ok: false, error: 'not found' }, { status: 404 });
+
+  return NextResponse.json(
+    {
+      ok: true,
+      data: {
+        id: t.id,
+        slug: t.slug,
+        title: displayTitle(t, locale as 'ar' | 'en'),
+        type: t.type,
+        year: t.releaseYear,
+        rating: t.rating,
+        posterUrl: t.posterUrl,
+        backdropUrl: t.backdropUrl,
+        overview: t.overview,
+        seriesKey: seriesKey(t.originalTitle),
+        episodeCount: t.episodeCount,
+        playableCount: t.playableCount,
+        seasons: t.seasons.map((s) => ({
+          number: s.number,
+          name: s.name,
+          episodeCount: s.episodes.length,
+          playableCount: s.episodes.filter((e) => e.sources.length > 0).length,
+        })),
+      },
+    },
+    { headers: { 'Cache-Control': 'public, max-age=120, s-maxage=600' } },
+  );
+}

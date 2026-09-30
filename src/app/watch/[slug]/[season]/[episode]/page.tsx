@@ -17,6 +17,16 @@ interface Params {
   episode: string;
 }
 
+/** host المصدر للعرض فقط (لا روابط خارجية — التشغيل كله داخل الموقع). */
+function hostOf(url: string | null): string {
+  if (!url) return '—';
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return '—';
+  }
+}
+
 export default async function WatchPage({ params }: { params: Params }) {
   const locale = getLocale();
   const dict = getDictionary(locale);
@@ -200,21 +210,55 @@ export default async function WatchPage({ params }: { params: Params }) {
           </section>
 
           {/* side info */}
-          <aside className="card h-fit space-y-3 p-4 !bg-ink-900 dark:!border-ink-800">
-            <h2 className="text-sm font-bold uppercase tracking-wide text-ink-400">
-              {dict.detail.overview}
-            </h2>
-            <p className="line-clamp-6 text-sm leading-relaxed text-ink-300">
-              {title.overview || dict.detail.noOverview}
-            </p>
-            <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-400">
-              {title.releaseYear ? <li className="tabular">{title.releaseYear}</li> : null}
-              {typeof title.rating === 'number' ? (
-                <li className="tabular font-bold text-amber-400">★ {title.rating.toFixed(1)}</li>
-              ) : null}
-              <li>{dict.browse.types[title.type] ?? title.type}</li>
-              <li>{dict.detail.sourceCount(episode.sources.length)}</li>
-            </ul>
+          <aside className="h-fit space-y-4">
+            <div className="card space-y-3 p-4 !bg-ink-900 dark:!border-ink-800">
+              <h2 className="text-sm font-bold uppercase tracking-wide text-ink-400">
+                {dict.detail.overview}
+              </h2>
+              <p className="line-clamp-6 text-sm leading-relaxed text-ink-300">
+                {title.overview || dict.detail.noOverview}
+              </p>
+              <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-400">
+                {title.releaseYear ? <li className="tabular">{title.releaseYear}</li> : null}
+                {typeof title.rating === 'number' ? (
+                  <li className="tabular font-bold text-amber-400">★ {title.rating.toFixed(1)}</li>
+                ) : null}
+                <li>{dict.browse.types[title.type] ?? title.type}</li>
+                <li>{dict.detail.sourceCount(episode.sources.length)}</li>
+              </ul>
+            </div>
+
+            <div className="card space-y-3 p-4 !bg-ink-900 dark:!border-ink-800">
+              <h2 className="text-sm font-bold uppercase tracking-wide text-ink-400">
+                {locale === 'ar' ? 'مصادر هذه الحلقة' : 'Episode sources'}
+              </h2>
+              <ul className="space-y-2">
+                {episode.sources.map((s) => (
+                  <li
+                    key={s.id}
+                    className="flex items-center justify-between gap-2 rounded-lg border border-ink-800 px-2.5 py-1.5 text-xs"
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate font-bold text-ink-200">
+                        {s.name || s.provider}
+                      </span>
+                      <span className="tabular block truncate text-ink-500" dir="ltr">
+                        {hostOf(s.streamUrl || s.url)}
+                        {s.quality ? ` · ${s.quality}` : ''}
+                      </span>
+                    </span>
+                    <span className="shrink-0 rounded-full bg-emerald-500/15 px-2 py-0.5 font-bold text-emerald-400">
+                      {locale === 'ar' ? 'نشط' : 'active'}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <p className="text-[11px] leading-relaxed text-ink-500">
+                {locale === 'ar'
+                  ? 'كل المصادر تعمل داخل الموقع — لا تحويل لمواقع خارجية.'
+                  : 'All sources play inside this site — no external redirects.'}
+              </p>
+            </div>
           </aside>
         </div>
       </main>

@@ -1,22 +1,25 @@
 /* eslint-disable no-console */
 /**
- * Stream health check: marks dead mirrors so the player never shows them.
+ * Stream health check with a 3-strike lifecycle (per data contract):
+ * unknown → active/suspect → dead. A single failure, a 403, or a lone HEAD
+ * never kills a mirror — only 3 consecutive qualified failures mark it dead,
+ * and the record is kept (never deleted). Success resurrects (active).
+ * Time-bound URLs (expires=/token=) are SKIPPED, never marked.
  *
- *   npm run check:streams            check all live sources
+ *   npm run check:streams                  live sources only
  *   npm run check:streams -- --limit 300
+ *   npm run check:streams -- --include-dead   + weekly recheck of stale dead
  *
- * Rules:
- * - time-bound URLs (expires=/token=/signature=) are SKIPPED, never marked:
- *   they fail by age, not by death, and re-resolve on the next scrape.
- * - a source is dead on: network error, HTTP != 200, or a "deleted/removed"
- *   marker in the page (dood/voe/mp4upload wording).
- * - concurrency 8 + short timeouts to avoid hammering hosts.
+ * The strike counter lives in EpisodeSource.headers as {"v":1,"fails":n}
+ * (that column is otherwise unused) — no schema change needed.
  */
 import 'dotenv/config';
 import { prisma } from '../src/lib/db';
 
 const CONCURRENCY = 8;
 const TIMEOUT_MS = 15000;
+const STRIKES_TO_DIE = 3;
+const RECHECK_DEAD_AFTER_DAYS = 7;
 
 const SKIP_PATTERNS = [/expires=/i, /[?&]token=/i, /signature=/i, /exp=\d{9,}/];
 const DEAD_MARKERS = [
@@ -62,21 +65,51 @@ function isDeadResult(res: { status: number; text: string } | null): boolean {
   return DEAD_MARKERS.some((m) => res.text.includes(m));
 }
 
+/** strike counter stored in the unused headers column. */
+function readFails(headers: string | null): number {
+  if (!headers) return 0;
+  try {
+    const j = JSON.parse(headers) as { v?: number; fails?: number };
+    return j?.v === 1 && typeof j.fails === 'number' ? j.fails : 0;
+  } catch {
+    return 0; // real headers data — never touch, treat as 0 strikes
+  }
+}
+
+function writeFails(headers: string | null, fails: number): string | null {
+  if (fails <= 0) {
+    if (!headers) return null;
+    try {
+      const j = JSON.parse(headers) as { v?: number };
+      if (j?.v === 1) return null; // ours — clear on success
+    } catch { /* real data below */ }
+    return headers; // someone else's headers — leave them
+  }
+  return JSON.stringify({ v: 1, fails });
+}
+
 async function main() {
   const limitArg = process.argv.find((a) => a === '--limit');
   const limit = limitArg ? Number(process.argv[process.argv.indexOf('--limit') + 1]) || 0 : 0;
+  const includeDead = process.argv.includes('--include-dead');
+  const staleBefore = new Date(Date.now() - RECHECK_DEAD_AFTER_DAYS * 86400 * 1000);
 
+  const where = includeDead
+    ? { OR: [{ isDead: false }, { isDead: true, lastSyncedAt: { lt: staleBefore } }] }
+    : { isDead: false };
   const sources = await prisma.episodeSource.findMany({
-    where: { isDead: false },
-    select: { id: true, url: true, streamUrl: true, provider: true },
+    where,
+    select: { id: true, url: true, streamUrl: true, provider: true, headers: true, isDead: true },
     orderBy: { lastSyncedAt: 'asc' },
     ...(limit ? { take: limit } : {}),
   });
-  console.log(`checking ${sources.length} live sources…`);
+  console.log(`checking ${sources.length} sources (include-dead=${includeDead})…`);
 
   let dead = 0;
+  let resurrected = 0;
   let skipped = 0;
   let alive = 0;
+  let suspects = 0;
   for (let i = 0; i < sources.length; i += CONCURRENCY) {
     const batch = sources.slice(i, i + CONCURRENCY);
     const results = await Promise.all(
@@ -84,7 +117,7 @@ async function main() {
         const target = s.streamUrl || s.url;
         if (!target || !/^https?:\/\//i.test(target)) return { s, skip: true as const };
         if (isSkippable(target)) return { s, skip: true as const };
-        return { s, dead: isDeadResult(await fetchText(target)) };
+        return { s, failed: isDeadResult(await fetchText(target)) };
       }),
     );
     for (const r of results) {
@@ -92,21 +125,39 @@ async function main() {
         skipped += 1;
         continue;
       }
-      if (r.dead) {
-        dead += 1;
+      const fails = readFails(r.s.headers);
+      if (!r.failed) {
+        alive += 1;
+        // النجاح يعيده active دائمًا (إحياء) ويصفّر الضربات
+        if (r.s.isDead || fails > 0) {
+          resurrected += r.s.isDead ? 1 : 0;
+          await prisma.episodeSource.update({
+            where: { id: r.s.id },
+            data: { isDead: false, headers: writeFails(r.s.headers, 0), lastSyncedAt: new Date() },
+          });
+        }
+        continue;
+      }
+      const next = fails + 1;
+      if (next >= STRIKES_TO_DIE) {
+        if (!r.s.isDead) dead += 1;
         await prisma.episodeSource.update({
           where: { id: r.s.id },
-          data: { isDead: true, lastSyncedAt: new Date() },
+          data: { isDead: true, headers: writeFails(r.s.headers, next), lastSyncedAt: new Date() },
         });
       } else {
-        alive += 1;
+        suspects += 1; // مشتبه (1-2 ضربات) — يبقى ظاهرًا حتى الضربة الثالثة
+        await prisma.episodeSource.update({
+          where: { id: r.s.id },
+          data: { headers: writeFails(r.s.headers, next), lastSyncedAt: new Date() },
+        });
       }
     }
     if ((i + CONCURRENCY) % 80 === 0 || i + CONCURRENCY >= sources.length) {
-      console.log(`  …${Math.min(i + CONCURRENCY, sources.length)}/${sources.length} (dead=${dead} alive=${alive} skipped=${skipped})`);
+      console.log(`  …${Math.min(i + CONCURRENCY, sources.length)}/${sources.length} (dead=${dead} suspects=${suspects} alive=${alive} resurrected=${resurrected} skipped=${skipped})`);
     }
   }
-  console.log(`done: dead=${dead} alive=${alive} skipped(time-bound)=${skipped}`);
+  console.log(`done: dead=${dead} suspects(1-2 strikes)=${suspects} alive=${alive} resurrected=${resurrected} skipped(time-bound)=${skipped}`);
   await prisma.$disconnect();
 }
 

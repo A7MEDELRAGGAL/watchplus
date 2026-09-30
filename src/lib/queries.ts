@@ -62,8 +62,9 @@ export function displayTitle(
   title: Pick<TitleCardData, 'originalTitle' | 'titleAr' | 'titleEn'>,
   locale: 'ar' | 'en',
 ): string {
-  if (locale === 'ar') return title.titleAr || title.originalTitle;
-  return title.titleEn || title.originalTitle;
+  const raw = locale === 'ar' ? title.titleAr || title.originalTitle : title.titleEn || title.originalTitle;
+  // لاحقات المصدر الزائدة ("( مسلسل )"، "( فيلم )"، "(TV)") — النوع يظهر كشارة أصلًا
+  return raw.replace(/\s*\(\s*(مسلسل|فيلم|مدبلجة|TV)\s*\)\s*$/i, '').trim() || raw;
 }
 
 const PUBLISHED = { status: 'PUBLISHED' } as const;
@@ -333,6 +334,56 @@ export async function getTitleBySlug(slug: string) {
 }
 
 export type TitleDetailData = NonNullable<Awaited<ReturnType<typeof getTitleBySlug>>>;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Series linking — seasons & editions of one show stay separate rows (no forced
+// merge), but the detail page links them so S2/S3/OVA are one tap away.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Season/part markers in Latin + Arabic (incl. ordinals). */
+const SEASON_MARKERS =
+  /(\bseasons?\b|\bs\d+\b|\bpart\s*\d+|\bcour\s*\d+|\bfinal(\s*season)?\b|\bthe\s*movie\b|:\s*the\s*movie|الموسم\s*(الأول|الاول|الثاني|الثانى|الثالث|الرابع|الخامس|\d+)|الجزء\s*(الأول|الاول|الثاني|الثانى|الثالث|\d+))/gi;
+
+/** Normalized series key: title without season/part markers. Never merges — only links. */
+export function seriesKey(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(SEASON_MARKERS, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+/** Best-guess season number from markers (Final/movie → 900s, order last). */
+export function seasonRank(title: string): number {
+  const t = ` ${title.toLowerCase()} `;
+  const m =
+    t.match(/\bseason\s*(\d+)/) ||
+    t.match(/\bs(\d+)\b/) ||
+    t.match(/\bpart\s*(\d+)/) ||
+    t.match(/الموسم\s*(\d+)/) ||
+    t.match(/الجزء\s*(\d+)/);
+  if (m) return Number(m[1]);
+  if (/الأول|الاول|\bfirst\b/.test(t)) return 1;
+  if (/الثاني|الثانى|\bsecond\b/.test(t)) return 2;
+  if (/الثالث|\bthird\b/.test(t)) return 3;
+  if (/final|the movie|فيلم/.test(t)) return 900;
+  return 500; // unmarked — between numbered seasons and movies
+}
+
+/** Other published titles sharing the series key, ordered by season rank. */
+export async function getRelatedTitles(id: string, originalTitle: string) {
+  const key = seriesKey(originalTitle);
+  if (key.length < 3) return [];
+  const all = await prisma.title.findMany({
+    where: { status: 'PUBLISHED' },
+    select: { ...TITLE_SELECT, id: true },
+  });
+  return all
+    .filter((t) => t.id !== id && seriesKey(t.originalTitle) === key)
+    .sort((a, b) => seasonRank(a.originalTitle) - seasonRank(b.originalTitle))
+    .slice(0, 12);
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Search
