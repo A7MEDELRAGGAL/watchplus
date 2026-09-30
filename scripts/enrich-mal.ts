@@ -33,12 +33,13 @@ function matchScore(a: string, b: string): number {
   return n;
 }
 
-async function jikanSearch(q: string): Promise<any[]> {
+async function jikanSearch(q: string, attempt = 0): Promise<any[]> {
   try {
     const r = await fetch(`${BASE}/anime?q=${encodeURIComponent(q)}&limit=8&sfw=true`);
     if (r.status === 429) {
-      await sleep(5000);
-      return jikanSearch(q);
+      if (attempt >= 2) return [];
+      await sleep(8000);
+      return jikanSearch(q, attempt + 1);
     }
     if (!r.ok) return [];
     const j = (await r.json()) as any;
@@ -57,7 +58,19 @@ function stripHtml(s: string): string {
 }
 
 /** AniList GraphQL — يعمل حتى عند سقوط Jikan/MAL. */
-async function anilistSearch(q: string): Promise<any | null> {
+/** العناوين العربية المختلطة ("انمي ون بيس One Piece الحلقة 1182 مترجمة")
+ * لا يفهمها البحث — نستخلص الكلمات اللاتينية الدالة فقط. */
+function latinQuery(q: string): string {
+  const stop = new Set(['episode', 'episodes', 'movie', 'ova', 'ona', 'special', 'season', 'part', 'the', 'and', 'no', 'ni', 'wa', 'ga', 'to', 'no']);
+  const words = q
+    .replace(/[^A-Za-z0-9:!'’\- ]/g, ' ')
+    .split(/\s+/)
+    .filter((w) => w.length > 1 && !/^\d+$/.test(w) && !stop.has(w.toLowerCase()));
+  return words.slice(0, 6).join(' ');
+}
+
+async function anilistSearch(q: string, attempt = 0): Promise<any | null> {
+  const query = latinQuery(q) || q;
   try {
     const r = await fetch('https://graphql.anilist.co', {
       method: 'POST',
@@ -70,12 +83,13 @@ async function anilistSearch(q: string): Promise<any | null> {
             studios { nodes { name } }
           }
         }`,
-        variables: { s: q.slice(0, 80) },
+        variables: { s: query.slice(0, 80) },
       }),
     });
     if (r.status === 429) {
-      await sleep(10000);
-      return anilistSearch(q);
+      if (attempt >= 2) return null;
+      await sleep(15000);
+      return anilistSearch(q, attempt + 1);
     }
     if (!r.ok) return null;
     const j = (await r.json()) as any;
@@ -110,13 +124,16 @@ async function main() {
     try {
       // 1) AniList أولًا (شغال دائمًا تقريبًا)
       const ani = await anilistSearch(q);
+      const lq = latinQuery(q);
+      const need = Math.min(2, lq.split(/\s+/).filter(Boolean).length) || 1;
       const aniScore = ani
         ? Math.max(
-            matchScore(q, ani.title?.romaji ?? ''),
-            matchScore(q, ani.title?.english ?? ''),
+            matchScore(lq || q, ani.title?.romaji ?? ''),
+            matchScore(lq || q, ani.title?.english ?? ''),
           )
         : 0;
-      if (ani && aniScore >= 2) {
+      if (ani && aniScore >= need) {
+        // صور MAL/AniList الرسمية أولًا دائمًا (أجود من صور المصادر)
         const poster = ani.coverImage?.large ?? null;
         await prisma.title.update({
           where: { id: t.id },

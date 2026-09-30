@@ -102,6 +102,21 @@ async function main() {
     if (report.message) console.log(`    ${report.message}`);
   }
 
+  // Post-import hook: fresh CSV titles get MAL/AniList posters+ratings automatically.
+  // Opt-in via CSV_AUTO_ENRICH=1 (limit to keep nightly runs short).
+  if (process.env.CSV_AUTO_ENRICH === '1' && reports.some((r) => r.provider === 'csv' && r.imported > 0)) {
+    console.log('\n  enriching fresh CSV titles (AniList first, Jikan fallback)…');
+    const { execFileSync } = await import('node:child_process');
+    try {
+      execFileSync(process.execPath, ['node_modules/tsx/dist/cli.mjs', 'scripts/enrich-mal.ts', '--limit', process.env.CSV_ENRICH_LIMIT ?? '150'], {
+        stdio: 'inherit',
+        timeout: 20 * 60 * 1000,
+      });
+    } catch (e) {
+      console.log(`  enrich hook failed (non-fatal): ${e instanceof Error ? e.message : e}`);
+    }
+  }
+
   console.log('\n  ' + '-'.repeat(64));
   const totals = reports.reduce(
     (acc, r) => ({

@@ -75,30 +75,43 @@ const PUBLISHED = { status: 'PUBLISHED' } as const;
 /** One row per home section, in the order the page renders them. */
 export type HomeRows = [TitleCardData[], TitleCardData[], TitleCardData[], TitleCardData[]];
 
+/**
+ * Home quality gate: a card without a poster or without a single playable
+ * episode never reaches the front page (no more empty/broken cards).
+ */
+const DISPLAYABLE = {
+  posterUrl: { not: null },
+  seasons: { some: { episodes: { some: { sources: { some: { isDead: false } } } } } },
+} as const;
+
 export async function getRows(limit = 20): Promise<HomeRows> {
   return Promise.all([
+    // رائج: الأعلى مشاهدة وتقييمًا (بشرط العرض)
     prisma.title.findMany({
-      where: PUBLISHED,
+      where: { ...PUBLISHED, ...DISPLAYABLE },
       select: TITLE_SELECT,
-      orderBy: { popularity: 'desc' },
+      orderBy: [{ views: 'desc' }, { rating: 'desc' }],
       take: limit,
     }),
+    // الأحدث: آخر ما دخل قاعدة البيانات (استيراد/تحديث)
     prisma.title.findMany({
-      where: PUBLISHED,
+      where: { ...PUBLISHED, ...DISPLAYABLE },
       select: TITLE_SELECT,
-      orderBy: { createdAt: 'desc' },
+      orderBy: { updatedAt: 'desc' },
       take: limit,
     }),
+    // أنمي: الأعلى تقييمًا أولًا (بوستر + روابط شرط)
     prisma.title.findMany({
-      where: { ...PUBLISHED, type: 'ANIME' },
+      where: { ...PUBLISHED, type: 'ANIME', ...DISPLAYABLE },
       select: TITLE_SELECT,
-      orderBy: { popularity: 'desc' },
+      orderBy: [{ rating: 'desc' }, { votesCount: 'desc' }],
       take: limit,
     }),
+    // أفلام: نفس البوابة
     prisma.title.findMany({
-      where: { ...PUBLISHED, type: 'MOVIE' },
+      where: { ...PUBLISHED, type: 'MOVIE', ...DISPLAYABLE },
       select: TITLE_SELECT,
-      orderBy: { popularity: 'desc' },
+      orderBy: [{ rating: 'desc' }, { updatedAt: 'desc' }],
       take: limit,
     }),
   ]);
