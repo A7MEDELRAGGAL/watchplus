@@ -13,9 +13,7 @@
  */
 import 'dotenv/config';
 import { prisma } from '../src/lib/db';
-
-const norm = (s: string) =>
-  s.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s{2,}/g, ' ').trim();
+import { mergeKey } from '../src/lib/scraper/normalize';
 
 async function main() {
   const go = process.argv.includes('--go');
@@ -33,7 +31,7 @@ async function main() {
 
   const byName = new Map<string, typeof titles>();
   for (const t of titles) {
-    const k = norm(t.originalTitle);
+    const k = mergeKey(t.originalTitle);
     if (!k) continue;
     const l = byName.get(k) ?? [];
     l.push(t);

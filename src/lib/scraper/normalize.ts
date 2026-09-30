@@ -339,6 +339,22 @@ export function isJunkLabel(s: string): boolean {
   );
 }
 
+/**
+ * مفتاح الدمج: نفس العمل بصياغات مختلفة ("Bleach ( مسلسل )" = "BLEACH").
+ * يزيل الأقواس ولاحقات النوع فقط — الأرقام وعلامات الموسم تبقى (لا دمج مواسم).
+ */
+export function mergeKey(title: string): string {
+  return (title || '')
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .split(/\s+/)
+    .filter((w) => w && !/^(مسلسل|فيلم|مدبلجة|tv)$/i.test(w))
+    .join(' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
 function toDate(value?: string | null): Date | null {
   if (!value) return null;
   const d = new Date(value);

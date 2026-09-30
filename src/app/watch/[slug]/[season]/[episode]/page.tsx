@@ -9,7 +9,7 @@ import { getLocale } from '@/lib/i18n/server';
 import { getSessionUser } from '@/lib/auth';
 import { displayTitle } from '@/lib/queries';
 import { prisma } from '@/lib/db';
-import { getTitleBySlug, canonicalSlug, cleanEpisodeName, displaySeasonNumber } from '@/lib/queries';
+import { getTitleBySlug, canonicalSlug, cleanEpisodeName, displaySeasonNumber, hasLive } from '@/lib/queries';
 import { classify, pickDefault, readFails, type ServerRow } from '@/lib/servers';
 import { applyProbe, probeTarget } from '@/lib/server-health';
 
@@ -221,7 +221,7 @@ export default async function WatchPage({ params }: { params: Params }) {
             {season.episodes.map((e) => {
               const active = e.number === episodeNumber;
               const seen = watchedEpisodes.has(e.number);
-              const live = e.sources.some((s) => !s.isDead);
+              const live = hasLive(e);
               const label = cleanEpisodeName(e.name, e.number);
               return (
                 <li key={e.id} title={label}>

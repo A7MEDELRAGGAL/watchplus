@@ -26,6 +26,7 @@ import {
 } from '../src/lib/servers';
 import { fixMojibake, isJunkLabel } from '../src/lib/scraper/normalize';
 import { cleanEpisodeName, displaySeasonNumber, seriesKey, seasonRank } from '../src/lib/queries';
+import { mergeKey } from '../src/lib/scraper/normalize';
 
 /**
  * Applies one robots.txt to a path the way the crawler does, but without
@@ -338,6 +339,10 @@ const mkRow = (over: Partial<ServerRow> & { id: string }): ServerRow => ({
   assert.equal(displaySeasonNumber('Naruto', 1), 1);
   assert.equal(seriesKey('Shingeki no Kyojin Season 2'), 'shingeki no kyojin');
   assert.equal(seasonRank('Bleach: The Movie'), 900);
+  // mergeKey: نفس العمل بصياغات مختلفة يُدمج، والمواسم لا
+  assert.equal(mergeKey('Bleach ( مسلسل )'), mergeKey('BLEACH'));
+  assert.notEqual(mergeKey('Naruto'), mergeKey('Naruto Shippuuden'));
+  assert.notEqual(mergeKey('Shingeki no Kyojin Season 2'), mergeKey('Shingeki no Kyojin Season 3'));
   passed += 1;
 }
 

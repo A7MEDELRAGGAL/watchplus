@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { getTitleBySlug } from '@/lib/queries';
+import { getTitleBySlug, hasLive } from '@/lib/queries';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,12 +22,12 @@ export async function GET(_request: Request, { params }: { params: { id: string 
         seasonNumber: s.number,
         name: s.name,
         episodeCount: s.episodes.length,
-        playableCount: s.episodes.filter((e) => e.sources.some((x) => !x.isDead)).length,
+        playableCount: s.episodes.filter((e) => hasLive(e)).length,
         episodes: s.episodes.map((e) => ({
           id: e.id,
           number: e.number,
           name: e.name,
-          playable: e.sources.some((x) => !x.isDead),
+          playable: hasLive(e),
           serverCount: e.sources.filter((x) => !x.isDead).length,
         })),
       })),

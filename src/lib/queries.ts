@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/db';
 import { fromJsonText } from '@/lib/db-json';
+import { isExpiringLink } from '@/lib/servers';
 import type { Prisma } from '@prisma/client';
 
 /**
@@ -378,12 +379,16 @@ export async function getTitleBySlug(slug: string) {
 
 export type TitleDetailData = NonNullable<Awaited<ReturnType<typeof getTitleBySlug>>>;
 
-/** حلقة "قابلة للتشغيل" = فيها سيرفر واحد حي على الأقل (الميت لا يُحتسب). */
-export function hasLive(ep: { sources: { isDead: boolean }[] }): boolean {
-  return ep.sources.some((s) => !s.isDead);
+/** حلقة "قابلة للتشغيل" = سيرفر حي واحد على الأقل (لا ميت ولا منتهٍ — المنتهي ليس صالحًا). */
+export function hasLive(
+  ep: { sources: { isDead: boolean; url: string; streamUrl: string | null }[] },
+): boolean {
+  return ep.sources.some((s) => !s.isDead && !isExpiringLink(s.streamUrl || s.url));
 }
 
-export function liveCount(eps: { sources: { isDead: boolean }[] }[]): number {
+export function liveCount(
+  eps: { sources: { isDead: boolean; url: string; streamUrl: string | null }[] }[],
+): number {
   return eps.filter(hasLive).length;
 }
 

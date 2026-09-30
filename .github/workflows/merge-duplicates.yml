@@ -1,0 +1,42 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Duplicate merge: exact same show in two rows (one with streams, one without)
+# keeps the survivor + deletes the stream-less row after metadata copy.
+# Manual trigger only — review the dry-run log first.
+# ─────────────────────────────────────────────────────────────────────────────
+name: merge-duplicates
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: merge-duplicates
+  cancel-in-progress: false
+
+jobs:
+  merge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Dry run first (report only)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npx tsx scripts/merge-duplicates.ts
+
+      - name: Apply merge
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npx tsx scripts/merge-duplicates.ts -- --go

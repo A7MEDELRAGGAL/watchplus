@@ -323,8 +323,8 @@ function Episodes({
 
           <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {season.episodes.map((ep) => {
-              const live = ep.sources.filter((s) => !s.isDead);
-              const playable = live.length > 0;
+              const playable = hasLive(ep);
+              const live = ep.sources.filter((s) => !s.isDead && playable);
               // "لم تبث بعد" للمواعيد المستقبلية فقط — القديم بلا روابط له رسالته
               const upcoming = ep.airDate ? new Date(ep.airDate).getTime() > Date.now() : false;
               const inner = (
