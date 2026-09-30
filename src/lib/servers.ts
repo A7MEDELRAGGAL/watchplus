@@ -34,6 +34,20 @@ export function isExpiringLink(target: string): boolean {
   return EXPIRY_PATTERNS.some((p) => p.test(target));
 }
 
+/**
+ * expires_at الحقيقي: يُقرأ من expires=<unix> في الرابط، وإلا null —
+ * أبدًا ليس checked_at.
+ */
+export function parseExpiry(target: string): string | null {
+  const m = target.match(/[?&]expires=(\d{10,13})/i) || target.match(/[?&]exp=(\d{10,13})/i);
+  if (!m) return null;
+  const n = Number(m[1]);
+  const ms = m[1].length > 10 ? n : n * 1000;
+  if (!Number.isFinite(ms) || ms <= 0) return null;
+  const d = new Date(ms);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
 export function hostOf(url: string | null): string | null {
   if (!url) return null;
   try {
@@ -76,7 +90,7 @@ export function classify(s: ServerRow): ClassifiedServer {
     status,
     isDownload: isDownloadable(s),
     host: hostOf(target),
-    expiresAt: expiring ? s.checkedAt : null,
+    expiresAt: expiring ? (parseExpiry(target) ?? null) : null,
   };
 }
 
