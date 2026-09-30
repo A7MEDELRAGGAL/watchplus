@@ -34,8 +34,14 @@ async function main() {
   const preview: { from: string; to: string }[] = [];
   for (const t of titles) {
     const cleaned = cleanTitle(t.originalTitle);
-    // مختلط (نظيف ومختلف) أو زائف تمامًا — الاثنان يحتاجان إصلاحًا
-    const needsClean = cleaned !== t.originalTitle && !isJunkTitle(cleaned);
+    // مختلط (نظيف ومختلف) أو زائف تمامًا — الاثنان يحتاجان إصلاحًا.
+    // فروق الترقيم وحدها (Steins;Gate) ليست سببًا للمساس بالاسم.
+    const wordsBefore = t.originalTitle.replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter(Boolean);
+    const wordsAfter = cleaned.replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter(Boolean);
+    const needsClean =
+      cleaned !== t.originalTitle &&
+      !isJunkTitle(cleaned) &&
+      wordsAfter.length < wordsBefore.length;
     if (!needsClean && !isJunkTitle(t.originalTitle)) continue;
     junk += 1;
     let pretty: string | null = needsClean ? cleaned : null;

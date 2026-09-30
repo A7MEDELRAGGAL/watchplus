@@ -65,7 +65,7 @@ function latinQuery(q: string): string {
   const words = q
     .replace(/[^A-Za-z0-9:!'’\- ]/g, ' ')
     .split(/\s+/)
-    .filter((w) => w.length > 1 && !/^\d+$/.test(w) && !stop.has(w.toLowerCase()));
+    .filter((w) => w.length > 1 && !/^\d+$/.test(w) && !stop.has(w.toLowerCase()) && !/^(4k|8k|1080p?|720p?|480p?|f?hd|bluray|bdrip)$/i.test(w));
   return words.slice(0, 6).join(' ');
 }
 
@@ -79,7 +79,9 @@ async function anilistSearch(q: string, attempt = 0): Promise<any | null> {
         query: `query ($s: String) {
           Media(search: $s, type: ANIME) {
             id title { romaji english native } coverImage { large }
-            averageScore description genres seasonYear
+            bannerImage averageScore description genres seasonYear
+            status nextAiringEpisode { episode airingAt }
+            trailer { id site }
             studios { nodes { name } }
           }
         }`,
@@ -146,7 +148,7 @@ async function main() {
             ...(ani.studios?.nodes?.length
               ? { studios: JSON.stringify(ani.studios.nodes.map((s: any) => ({ name: s.name }))) }
               : {}),
-            extra: JSON.stringify({ anilistId: ani.id }),
+            extra: JSON.stringify({ anilistId: ani.id, titleNative: ani.title?.native ?? null }),
           },
         });
         ok += 1;
@@ -180,7 +182,7 @@ async function main() {
               ...(best.genres?.length
                 ? { genres: JSON.stringify(best.genres.map((g: any) => ({ name: g.name }))) }
                 : {}),
-              extra: JSON.stringify({ malId: best.mal_id, malUrl: best.url }),
+              extra: JSON.stringify({ malId: best.mal_id, malUrl: best.url, titleNative: best.title_japanese ?? null }),
             },
           });
           ok += 1;

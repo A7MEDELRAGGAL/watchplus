@@ -92,6 +92,7 @@ async function main() {
   const limitArg = process.argv.find((a) => a === '--limit');
   const limit = limitArg ? Number(process.argv[process.argv.indexOf('--limit') + 1]) || 0 : 0;
   const includeDead = process.argv.includes('--include-dead');
+  const newestFirst = process.argv.includes('--newest');
   const staleBefore = new Date(Date.now() - RECHECK_DEAD_AFTER_DAYS * 86400 * 1000);
 
   const where = includeDead
@@ -108,7 +109,7 @@ async function main() {
   const rest = await prisma.episodeSource.findMany({
     where: { ...where, NOT: { id: { in: reported.map((r) => r.id) } } },
     select,
-    orderBy: { lastSyncedAt: 'asc' },
+    orderBy: newestFirst ? { lastSyncedAt: 'desc' } : { lastSyncedAt: 'asc' },
     ...(limit ? { take: Math.max(0, limit - reported.length) } : {}),
   });
   const sources = [...reported, ...rest];

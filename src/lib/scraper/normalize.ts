@@ -248,7 +248,7 @@ const JUNK_WORDS =
 const EP_MARKERS = /(حلقة|الحلقة|موسم|الموسم)/;
 /** كلمات تُحذف عند التنظيف (أوسع من JUNK_WORDS: رتب + صيغ + جودات). */
 const CLEAN_WORDS =
-  /^(انمي|anime|special|tv|ova|ona|season|episode|ep|مترجمة|مترجم|مدبلجة|مدبلج|hd|حل|الحل|حلقة|الحلقة|حلقات|موسم|الموسم|مسلسل|فيلم|خاصة|اسبشل|سبيشل|أونا|اونا|أوفا|اوفا|جزء|الجزء|الأول|الاول|الثاني|الثانى|الثالث|الرابع|الخامس|السادس|السابع|الثامن|التاسع|العاشر|العاشرة|الأخيرة|الاخيرة|كامل|كاملة|جميع|اونلاين|انمى|الأنمي|انمي)$/i;
+  /^(انمي|anime|special|tv|ova|ona|season|episode|ep|مترجمة|مترجم|مدبلجة|مدبلج|hd|حل|الحل|حلقة|الحلقة|حلقات|موسم|الموسم|مسلسل|فيلم|خاصة|اسبشل|سبيشل|أونا|اونا|أوفا|اوفا|جزء|الجزء|و?الأول|و?الاول|و?الثاني|و?الثانى|و?الثالث|و?الرابع|و?الخامس|و?السادس|و?السابع|و?الثامن|و?التاسع|و?العاشر|و?الأولى|و?الثانية|و?الثالثة|و?الرابعة|و?الخامسة|و?السادسة|و?السابعة|و?الثامنة|و?التاسعة|و?العاشرة|و?الحادية|و?عشر|و?عشرة|و?العشرون|و?الثلاثون|و?الأربعون|و?الخمسون|و?الستون|و?الأخير|و?الأخيرة|و?الاخير|و?الاخيرة|و?الأخيره|كامل|و?كاملة|جميع|اونلاين|انمى|الأنمي|انمي)$/i;
 
 const GENERIC_TITLES = new Set([
   'حلقات الأنمي الخاصة',
@@ -277,14 +277,35 @@ export function isJunkTitle(title: string): boolean {
  */
 export function cleanTitle(title: string): string {
   const t = (title || '').trim();
-  if (!t || !EP_MARKERS.test(t)) return t;
-  const rest = t
+  if (!t) return t;
+  let words = t
     .replace(/[^\p{L}\p{N}\s]/gu, ' ')
     .split(/\s+/)
-    .filter((w) => w && !/^\d+$/.test(w) && !CLEAN_WORDS.test(w))
-    .join(' ')
-    .replace(/\s{2,}/g, ' ')
-    .trim();
+    .filter(Boolean);
+  if (EP_MARKERS.test(t)) {
+    // مرحلة 1: داخل label-حلقة تُحذف كل كلمات التنظيف والأرقام والحروف المفردة
+    words = words.filter(
+      (w) => !/^\d+$/.test(w) && !/^[\u0600-\u06FF]$/.test(w) && !CLEAN_WORDS.test(w),
+    );
+  }
+  // مرحلة 2 (دائمًا آمنة): ذيل عربي زائد (مصدره لاحقات المصدر) يُحذف
+  // متى بقي رأس لاتيني صلب — العناوين العربية الخالصة لا تُمس أبدًا
+  for (;;) {
+    const last = words[words.length - 1];
+    const head = words.slice(0, -1).join(' ');
+    if (
+      last &&
+      /^[\u0600-\u06FF]+$/.test(last) &&
+      (/^[\u0600-\u06FF]$/.test(last) || CLEAN_WORDS.test(last)) &&
+      /[A-Za-z]{2,}/.test(head) &&
+      head.trim().length >= 3
+    ) {
+      words = words.slice(0, -1);
+      continue;
+    }
+    break;
+  }
+  const rest = words.join(' ').replace(/\s{2,}/g, ' ').trim();
   return rest.length >= 3 ? rest : t;
 }
 
