@@ -19,10 +19,33 @@ export async function GET(request: Request) {
   const locale = isLocale(rawLocale) ? rawLocale : 'ar';
 
   if (query.length < 2) {
+    if (url.searchParams.get('envelope') === '1') {
+      return NextResponse.json({ ok: true, source: 'site', action: 'search', count: 0, data: [] });
+    }
     return NextResponse.json({ results: [] });
   }
 
   const rows = await searchTitles(query, limit);
+
+  if (url.searchParams.get('envelope') === '1') {
+    return NextResponse.json(
+      {
+        ok: true,
+        source: 'site',
+        action: 'search',
+        count: rows.length,
+        data: rows.map((t) => ({
+          id: t.id,
+          slug: t.slug,
+          title: displayTitle(t, locale),
+          type: t.type,
+          year: t.releaseYear,
+          posterUrl: t.posterUrl,
+        })),
+      },
+      { headers: { 'Cache-Control': 'public, max-age=60, s-maxage=300' } },
+    );
+  }
 
   return NextResponse.json(
     {

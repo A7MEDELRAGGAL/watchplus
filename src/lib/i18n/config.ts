@@ -49,6 +49,7 @@ const ar = {
   home: {
     popular: 'الأكثر شعبية',
     latest: 'أضيف مؤخراً',
+    topRated: 'الأعلى تقييماً',
     anime: 'أنمي',
     movies: 'أفلام',
     series: 'مسلسلات',
@@ -197,6 +198,7 @@ const en: Dict = {
   home: {
     popular: 'Most popular',
     latest: 'Recently added',
+    topRated: 'Top rated',
     anime: 'Anime',
     movies: 'Movies',
     series: 'Series',

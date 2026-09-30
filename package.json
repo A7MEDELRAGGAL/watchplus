@@ -24,7 +24,6 @@
     "check:streams": "tsx scripts/check-streams.ts",
     "enrich:mal": "tsx scripts/enrich-mal.ts",
     "clean:catalogue": "tsx scripts/clean-catalogue.ts",
-    "enrich:mal": "tsx scripts/enrich-mal.ts",
     "scrape": "tsx scripts/scrape.ts",
     "scrape:dry": "tsx scripts/scrape.ts --dry",
     "probe": "tsx scripts/probe.ts",

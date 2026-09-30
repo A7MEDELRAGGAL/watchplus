@@ -1,10 +1,11 @@
 import Link from 'next/link';
 import { SiteHeader } from '@/components/site-header';
-import { TitleRow } from '@/components/title-card';
+import { TitleCard, TitleRow } from '@/components/title-card';
 import { getDictionary, intlLocale } from '@/lib/i18n/config';
 import { getLocale } from '@/lib/i18n/server';
 import { getSessionUser } from '@/lib/auth';
 import { getRows } from '@/lib/queries';
+import { getContinueWatching } from '@/lib/library';
 
 // The whole page is per-visitor (locale cookie, fresh catalogue), so never cache it.
 export const dynamic = 'force-dynamic';
@@ -13,8 +14,18 @@ export default async function HomePage() {
   const locale = getLocale();
   const dict = getDictionary(locale);
   const user = await getSessionUser();
-  const [popular, latest, anime, movies] = await getRows(20);
-  const isEmpty = popular.length === 0;
+  const [popular, latest, topRated, anime, movies] = await getRows(20);
+  const continueRows = user ? await getContinueWatching(user.id, 12) : [];
+  // الأقسام الفارغة تُتخطى بدل عرض بطاقة "لا يوجد شيء" — لا فراغ في الرئيسية.
+  const sections = [
+    { items: popular, heading: dict.home.popular, href: '/browse?sort=popular' },
+    { items: latest, heading: dict.home.latest, href: '/browse?sort=newest' },
+    { items: topRated, heading: dict.home.topRated, href: '/browse?sort=rating' },
+    { items: anime, heading: dict.home.anime, href: '/browse?type=ANIME' },
+    { items: movies, heading: dict.home.movies, href: '/browse?type=MOVIE' },
+  ].filter((s) => s.items.length > 0);
+  const isEmpty = sections.length === 0;
+  const heroTitle = sections[0]?.items[0];
 
   return (
     <div className="min-h-dvh">
@@ -31,35 +42,39 @@ export default async function HomePage() {
           </section>
         ) : (
           <>
-            <Hero title={popular[0]} locale={locale} dict={dict} />
-            <TitleRow
-              title={popular}
-              heading={dict.home.popular}
-              href="/browse?sort=popular"
-              locale={locale}
-              dict={dict}
-            />
-            <TitleRow
-              title={latest}
-              heading={dict.home.latest}
-              href="/browse?sort=newest"
-              locale={locale}
-              dict={dict}
-            />
-            <TitleRow
-              title={anime}
-              heading={dict.home.anime}
-              href="/browse?type=ANIME"
-              locale={locale}
-              dict={dict}
-            />
-            <TitleRow
-              title={movies}
-              heading={dict.home.movies}
-              href="/browse?type=MOVIE"
-              locale={locale}
-              dict={dict}
-            />
+            {heroTitle ? <Hero title={heroTitle} locale={locale} dict={dict} /> : null}
+            {continueRows.length > 0 ? (
+              <section className="space-y-3">
+                <div className="flex items-baseline justify-between gap-4">
+                  <h2 className="text-lg font-bold tracking-tight sm:text-xl">
+                    {dict.library.continueWatching}
+                  </h2>
+                  <Link
+                    href="/continue"
+                    className="shrink-0 text-sm font-medium text-brand-600 hover:underline dark:text-brand-400"
+                  >
+                    {dict.common.viewAll}
+                  </Link>
+                </div>
+                <ul className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+                  {continueRows.map(({ title }) => (
+                    <li key={title.id}>
+                      <TitleCard title={title} locale={locale} dict={dict} />
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+            {sections.map((s) => (
+              <TitleRow
+                key={s.href}
+                title={s.items}
+                heading={s.heading}
+                href={s.href}
+                locale={locale}
+                dict={dict}
+              />
+            ))}
           </>
         )}
       </main>

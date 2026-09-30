@@ -41,13 +41,14 @@ async function main() {
   // ── Home rows ────────────────────────────────────────────────────────────
   console.log('  getRows()');
   const rows = await getRows(6);
-  check('returns 4 rows', rows.length === 4, `got ${rows.length}`);
-  const [popular, newest, topRated, byYear] = rows;
+  check('returns 5 rows', rows.length === 5, `got ${rows.length}`);
+  const [popular, newest, topRated, anime, movies] = rows;
   for (const [name, row] of [
     ['popular', popular],
     ['newest', newest],
     ['top rated', topRated],
-    ['by year', byYear],
+    ['anime', anime],
+    ['movies', movies],
   ] as const) {
     const withTitle = row.filter((c) => c && (c.titleAr || c.originalTitle));
     check(

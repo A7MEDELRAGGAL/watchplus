@@ -1,0 +1,46 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Weekly catalogue hygiene: delete junk/empty titles, then mark dead mirrors
+# so the player never shows them. Runs Sunday 02:30 UTC + manual dispatch.
+# ─────────────────────────────────────────────────────────────────────────────
+name: hygiene
+
+on:
+  schedule:
+    - cron: '30 2 * * 0'
+  workflow_dispatch:
+
+concurrency:
+  group: hygiene
+  cancel-in-progress: false
+
+jobs:
+  clean:
+    if: github.repository_owner == 'A7MEDELRAGGAL' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Catalogue clean (dry run first, then delete)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          npx tsx scripts/clean-catalogue.ts
+          npx tsx scripts/clean-catalogue.ts -- --go
+
+      - name: Stream health check
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npx tsx scripts/check-streams.ts -- --limit 500

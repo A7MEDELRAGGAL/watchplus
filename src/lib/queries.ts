@@ -73,7 +73,13 @@ const PUBLISHED = { status: 'PUBLISHED' } as const;
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** One row per home section, in the order the page renders them. */
-export type HomeRows = [TitleCardData[], TitleCardData[], TitleCardData[], TitleCardData[]];
+export type HomeRows = [
+  TitleCardData[],
+  TitleCardData[],
+  TitleCardData[],
+  TitleCardData[],
+  TitleCardData[],
+];
 
 /**
  * Home quality gate: a card without a poster or without a single playable
@@ -100,6 +106,13 @@ export async function getRows(limit = 20): Promise<HomeRows> {
       orderBy: { updatedAt: 'desc' },
       take: limit,
     }),
+    // الأعلى تقييمًا (بوستر + روابط شرط)
+    prisma.title.findMany({
+      where: { ...PUBLISHED, rating: { not: null }, ...DISPLAYABLE },
+      select: TITLE_SELECT,
+      orderBy: [{ rating: 'desc' }, { votesCount: 'desc' }],
+      take: limit,
+    }),
     // أنمي: الأعلى تقييمًا أولًا (بوستر + روابط شرط)
     prisma.title.findMany({
       where: { ...PUBLISHED, type: 'ANIME', ...DISPLAYABLE },
@@ -107,7 +120,7 @@ export async function getRows(limit = 20): Promise<HomeRows> {
       orderBy: [{ rating: 'desc' }, { votesCount: 'desc' }],
       take: limit,
     }),
-    // أفلام: نفس البوابة
+    // أفلام: نفس البوابة (قد تكون فارغة — الصفحة تتخطى الفارغ بدل عرضه)
     prisma.title.findMany({
       where: { ...PUBLISHED, type: 'MOVIE', ...DISPLAYABLE },
       select: TITLE_SELECT,
@@ -216,19 +229,23 @@ export function collectGenres(rows: { genres: string | null }[]): Genre[] {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Next.js may hand dynamic params still percent-encoded for non-ASCII slugs
- * (verified live: /title/dragon-ball-gt-%D9%85... 404s while the decoded row
- * exists). Try the slug as-is, then decoded — whichever hits wins.
+ * Canonical form for comparing a requested slug with the stored one: decode
+ * once or twice (Next may hand the param still-encoded for Arabic slugs).
+ * Used by pages to redirect old/aliased slugs without looping on mere
+ * encoding differences.
  */
-function slugVariants(slug: string): string[] {
-  const out = [slug];
-  try {
-    const decoded = decodeURIComponent(slug);
-    if (decoded !== slug) out.push(decoded);
-  } catch {
-    /* malformed escape — use raw only */
+export function canonicalSlug(slug: string): string {
+  let out = slug;
+  for (let i = 0; i < 2; i += 1) {
+    try {
+      const decoded = decodeURIComponent(out);
+      if (decoded === out) break;
+      out = decoded;
+    } catch {
+      break;
+    }
   }
-  return [...new Set(out)];
+  return out;
 }
 
 export async function getTitleBySlug(slug: string) {
@@ -282,11 +299,21 @@ export async function getTitleBySlug(slug: string) {
 
   let title = await lookup(slug);
   if (!title) {
+    // فك التشفير المزدوج: Next.js قد يسلّم slug مشفّرًا مرة أو مرتين
+    // للعناوين العربية — جرّب مرة ثم مرتين، أي إصابة تكسب.
     try {
-      const decoded = decodeURIComponent(slug);
-      if (decoded !== slug) title = await lookup(decoded);
+      const once = decodeURIComponent(slug);
+      if (once !== slug) title = await lookup(once);
     } catch {
       /* malformed escape — keep null */
+    }
+    if (!title) {
+      try {
+        const twice = decodeURIComponent(decodeURIComponent(slug));
+        if (twice !== slug) title = await lookup(twice);
+      } catch {
+        /* double-encoded malformed — keep null */
+      }
     }
   }
 

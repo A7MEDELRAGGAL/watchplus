@@ -1,13 +1,13 @@
 import Image from 'next/image';
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
+import { notFound, permanentRedirect } from 'next/navigation';
 import { SiteHeader } from '@/components/site-header';
 import { LibraryButton } from '@/components/library-button';
 import { getDictionary, intlLocale } from '@/lib/i18n/config';
 import { getLocale } from '@/lib/i18n/server';
 import { getSessionUser } from '@/lib/auth';
 import { isInLibrary } from '@/lib/library';
-import { displayTitle, getTitleBySlug } from '@/lib/queries';
+import { displayTitle, getTitleBySlug, canonicalSlug } from '@/lib/queries';
 
 export const dynamic = 'force-dynamic';
 
@@ -32,6 +32,12 @@ export default async function TitlePage({ params }: { params: { slug: string } }
   const title = await getTitleBySlug(params.slug);
 
   if (!title) notFound();
+  // رابط قديم بسلاج مختلف (تغيّر بعد إعادة الاستيراد) → 301 للسلاج الحالي.
+  // تقارن الصيغ المفكوكة (Next قد يسلّم المشفّر للعربية) ولا تعيد التوجيه
+  // لفرق الترميز وحده — وإلا دخلنا حلقة. encodeURIComponent للـ Location.
+  if (canonicalSlug(params.slug) !== title.slug) {
+    permanentRedirect(`/title/${encodeURIComponent(title.slug)}`);
+  }
 
   const name = displayTitle(title, locale);
   const firstPlayable =

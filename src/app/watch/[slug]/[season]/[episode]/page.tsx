@@ -1,12 +1,12 @@
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
+import { notFound, permanentRedirect } from 'next/navigation';
 import { SiteHeader } from '@/components/site-header';
 import { VideoPlayer } from '@/components/video-player';
 import { getDictionary } from '@/lib/i18n/config';
 import { getLocale } from '@/lib/i18n/server';
 import { getSessionUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
-import { getTitleBySlug } from '@/lib/queries';
+import { getTitleBySlug, canonicalSlug } from '@/lib/queries';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,6 +22,11 @@ export default async function WatchPage({ params }: { params: Params }) {
   const user = await getSessionUser();
   const title = await getTitleBySlug(params.slug);
   if (!title) notFound();
+  if (canonicalSlug(params.slug) !== title.slug) {
+    permanentRedirect(
+      `/watch/${encodeURIComponent(title.slug)}/${params.season}/${params.episode}`,
+    );
+  }
 
   const seasonNumber = Number(params.season) || 1;
   const episodeNumber = Number(params.episode) || 1;
