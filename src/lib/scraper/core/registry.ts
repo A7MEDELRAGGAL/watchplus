@@ -2,6 +2,7 @@ import type { Provider } from '../types';
 import { tmdbProvider } from '../providers/tmdb';
 import { anilistProvider } from '../providers/anilist';
 import { jikanProvider } from '../providers/jikan';
+import { csvImportProvider } from '../providers/csv-import';
 import { createProvider, loadSourceConfigs } from '../providers/generic-css';
 
 /**
@@ -12,7 +13,7 @@ import { createProvider, loadSourceConfigs } from '../providers/generic-css';
  * time, so adding a site never means touching this file.
  */
 function buildRegistry(): Provider[] {
-  const builtIn = [anilistProvider, tmdbProvider, jikanProvider];
+  const builtIn = [anilistProvider, tmdbProvider, jikanProvider, csvImportProvider];
   const custom = loadSourceConfigs().map(createProvider);
   return [...builtIn, ...custom];
 }
