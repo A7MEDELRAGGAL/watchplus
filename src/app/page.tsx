@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { SiteHeader } from '@/components/site-header';
+import { HeroSlider } from '@/components/hero-slider';
 import { TitleCard, TitleRow } from '@/components/title-card';
 import { getDictionary, intlLocale } from '@/lib/i18n/config';
 import { getLocale } from '@/lib/i18n/server';
@@ -25,7 +26,6 @@ export default async function HomePage() {
     { items: movies, heading: dict.home.movies, href: '/browse?type=MOVIE' },
   ].filter((s) => s.items.length > 0);
   const isEmpty = sections.length === 0;
-  const heroTitle = sections[0]?.items[0];
 
   return (
     <div className="min-h-dvh">
@@ -42,7 +42,18 @@ export default async function HomePage() {
           </section>
         ) : (
           <>
-            {heroTitle ? <Hero title={heroTitle} locale={locale} dict={dict} /> : null}
+            {popular.length > 0 ? (
+              <HeroSlider
+                items={popular}
+                locale={locale}
+                labels={{
+                  slider: dict.home.popular,
+                  watch: dict.detail.watchNow,
+                  details: dict.detail.overview,
+                }}
+                typeNames={dict.browse.types}
+              />
+            ) : null}
             {continueRows.length > 0 ? (
               <section className="space-y-3">
                 <div className="flex items-baseline justify-between gap-4">
@@ -88,48 +99,5 @@ export default async function HomePage() {
         </div>
       </footer>
     </div>
-  );
-}
-
-function Hero({
-  title,
-  locale,
-  dict,
-}: {
-  title: Awaited<ReturnType<typeof getRows>>[0][number];
-  locale: 'ar' | 'en';
-  dict: ReturnType<typeof getDictionary>;
-}) {
-  const name = title.titleAr || title.originalTitle;
-
-  return (
-    <section className="relative overflow-hidden rounded-2xl border border-ink-200 dark:border-ink-800">
-      {title.backdropUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={`/api/img?url=${encodeURIComponent(title.backdropUrl)}&w=1600&q=70`}
-          alt=""
-          className="absolute inset-0 h-full w-full object-cover opacity-30"
-        />
-      ) : null}
-
-      <div className="relative space-y-3 p-6 sm:p-10">
-        <p className="text-xs font-semibold uppercase tracking-widest text-brand-600 dark:text-brand-400">
-          {dict.browse.types[title.type] ?? title.type}
-        </p>
-        <h1 className="max-w-2xl text-3xl font-black tracking-tight sm:text-4xl">{name}</h1>
-        {title.overview ? (
-          <p className="line-clamp-3 max-w-2xl text-sm text-ink-600 dark:text-ink-300">
-            {title.overview}
-          </p>
-        ) : null}
-        <Link
-          href={`/title/${title.slug}`}
-          className="inline-block rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-700"
-        >
-          {dict.detail.watchNow}
-        </Link>
-      </div>
-    </section>
   );
 }

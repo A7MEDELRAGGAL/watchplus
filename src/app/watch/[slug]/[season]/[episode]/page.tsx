@@ -76,109 +76,146 @@ export default async function WatchPage({ params }: { params: Params }) {
   }
 
   return (
-    <div className="min-h-dvh">
+    // غرفة المشاهدة داكنة دائمًا (class strategy يجعل dark: يعمل هنا مهما كان الثيم)
+    <div className="dark min-h-dvh bg-ink-950 text-ink-100">
       <SiteHeader locale={locale} dict={dict} user={user} />
 
-      <main className="container-page space-y-6 py-8">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="truncate text-xl font-bold tracking-tight sm:text-2xl">
+      <main className="container-page space-y-6 py-6">
+        {/* cinema header: poster thumb + title + position */}
+        <div className="flex items-center gap-4">
+          {title.posterUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={`/api/img?url=${encodeURIComponent(title.posterUrl)}&w=160&q=60`}
+              alt=""
+              className="h-20 w-14 shrink-0 rounded-xl object-cover shadow-card"
+            />
+          ) : null}
+          <div className="min-w-0 flex-1">
+            <Link
+              href={`/title/${title.slug}`}
+              className="truncate text-lg font-black tracking-tight hover:text-brand-400 sm:text-2xl"
+            >
               {title.titleAr || title.originalTitle}
-            </h1>
-            <p className="tabular text-sm text-ink-500 dark:text-ink-400">
+            </Link>
+            <p className="tabular mt-0.5 text-sm text-ink-400">
               {dict.common.seasonOf} {seasonNumber} · {dict.common.episode} {episodeNumber}
               {episode.name ? ` — ${episode.name}` : ''}
             </p>
           </div>
           <Link
             href={`/title/${title.slug}`}
-            className="rounded-lg border border-ink-200 px-3 py-1.5 text-sm dark:border-ink-700"
+            className="shrink-0 rounded-xl border border-ink-700 px-3 py-1.5 text-sm text-ink-300 transition hover:bg-ink-800"
           >
             {dict.watch.backToDetail}
           </Link>
         </div>
 
-        <VideoPlayer
-          startAt={resumable ? startAt : 0}
-          episodeId={user ? episode.id : undefined}
-          signedIn={Boolean(user)}
-          sources={episode.sources.map((s) => ({
-            id: s.id,
-            provider: s.provider,
-            name: s.name,
-            url: s.url,
-            streamUrl: s.streamUrl,
-            kind: s.kind,
-            quality: s.quality,
-            language: s.language,
-          }))}
-          labels={{
-            unavailable: dict.watch.unavailable,
-            openSource: dict.watch.openSource,
-            noStreams: dict.common.noStreams,
-          }}
-        />
+        {/* cinema frame */}
+        <div className="overflow-hidden rounded-3xl border border-ink-800 bg-black shadow-card">
+          <VideoPlayer
+            startAt={resumable ? startAt : 0}
+            episodeId={user ? episode.id : undefined}
+            signedIn={Boolean(user)}
+            sources={episode.sources.map((s) => ({
+              id: s.id,
+              provider: s.provider,
+              name: s.name,
+              url: s.url,
+              streamUrl: s.streamUrl,
+              kind: s.kind,
+              quality: s.quality,
+              language: s.language,
+            }))}
+            labels={{
+              unavailable: dict.watch.unavailable,
+              openSource: dict.watch.openSource,
+              noStreams: dict.common.noStreams,
+            }}
+          />
+        </div>
 
-        <nav className="flex items-center justify-between gap-3">
-          {prev ? (
-            <Link
-              href={`/watch/${title.slug}/${prev.season}/${prev.number}`}
-              className="rounded-lg border border-ink-200 px-3 py-1.5 text-sm transition hover:bg-ink-100 dark:border-ink-700 dark:hover:bg-ink-800"
-            >
-              {dict.watch.previousEpisode}
-            </Link>
-          ) : (
-            <span />
-          )}
-          {next ? (
-            <Link
-              href={`/watch/${title.slug}/${next.season}/${next.number}`}
-              className="rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-brand-700"
-            >
-              {dict.watch.nextEpisode}
-            </Link>
-          ) : (
-            <span />
-          )}
-        </nav>
-
-        <section className="space-y-3">
-          <h2 className="text-sm font-bold uppercase tracking-wide text-ink-500">
-            {dict.detail.episodes}
-          </h2>
-          <ul className="flex gap-2 overflow-x-auto pb-2">
-            {season.episodes.map((e) => {
-              const active = e.number === episodeNumber;
-              return (
-                <li key={e.id}>
+        <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
+          {/* episodes rail */}
+          <section className="card space-y-3 p-4 !bg-ink-900 dark:!border-ink-800">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-bold uppercase tracking-wide text-ink-400">
+                {dict.detail.episodes}
+              </h2>
+              <div className="flex gap-2">
+                {prev ? (
                   <Link
-                    href={`/watch/${title.slug}/${seasonNumber}/${e.number}`}
-                    aria-current={active ? 'true' : undefined}
-                    className={
-                      active
-                        ? 'tabular block h-10 w-10 rounded-lg bg-brand-600 text-center text-sm font-bold leading-10 text-white'
-                        : 'tabular block h-10 w-10 rounded-lg border border-ink-200 text-center text-sm leading-10 text-ink-600 transition hover:bg-ink-100 dark:border-ink-700 dark:text-ink-300 dark:hover:bg-ink-800'
-                    }
+                    href={`/watch/${title.slug}/${prev.season}/${prev.number}`}
+                    className="rounded-lg border border-ink-700 px-3 py-1.5 text-xs transition hover:bg-ink-800"
                   >
-                    {e.number}
+                    {dict.watch.previousEpisode}
                   </Link>
-                </li>
-              );
-            })}
-          </ul>
+                ) : null}
+                {next ? (
+                  <Link
+                    href={`/watch/${title.slug}/${next.season}/${next.number}`}
+                    className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-brand-500"
+                  >
+                    {dict.watch.nextEpisode}
+                  </Link>
+                ) : null}
+              </div>
+            </div>
+            <ul className="grid max-h-72 grid-cols-5 gap-2 overflow-y-auto sm:grid-cols-8 lg:grid-cols-6">
+              {season.episodes.map((e) => {
+                const active = e.number === episodeNumber;
+                const seen = watchedEpisodes.has(e.number);
+                const playable = e.sources.length > 0;
+                return (
+                  <li key={e.id}>
+                    <Link
+                      href={`/watch/${title.slug}/${seasonNumber}/${e.number}`}
+                      aria-current={active ? 'true' : undefined}
+                      className={
+                        active
+                          ? 'tabular block rounded-xl bg-brand-600 py-2.5 text-center text-sm font-black text-white shadow-card'
+                          : seen
+                            ? 'tabular block rounded-xl border border-brand-800 bg-brand-950 py-2.5 text-center text-sm text-brand-300 transition hover:bg-brand-900'
+                            : playable
+                              ? 'tabular block rounded-xl border border-ink-700 py-2.5 text-center text-sm text-ink-300 transition hover:border-brand-600 hover:text-white'
+                              : 'tabular block rounded-xl border border-ink-800 py-2.5 text-center text-sm text-ink-600'
+                      }
+                    >
+                      {e.number}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+            {user && watchedEpisodes.size > 0 ? (
+              <p className="text-xs text-ink-500 dark:text-ink-400">
+                {dict.detail.continueWatching}:{' '}
+                {[...watchedEpisodes]
+                  .sort((a, b) => a - b)
+                  .map((n) => `E${n}`)
+                  .join(' · ')}
+              </p>
+            ) : null}
+          </section>
 
-          {/* Mark which episodes are part-watched so the picker is not a wall of
-              identical squares once a season is halfway through. */}
-          {user && watchedEpisodes.size > 0 ? (
-            <p className="text-xs text-ink-500 dark:text-ink-400">
-              {dict.detail.continueWatching}:{' '}
-              {[...watchedEpisodes]
-                .sort((a, b) => a - b)
-                .map((n) => `E${n}`)
-                .join(' · ')}
+          {/* side info */}
+          <aside className="card h-fit space-y-3 p-4 !bg-ink-900 dark:!border-ink-800">
+            <h2 className="text-sm font-bold uppercase tracking-wide text-ink-400">
+              {dict.detail.overview}
+            </h2>
+            <p className="line-clamp-6 text-sm leading-relaxed text-ink-300">
+              {title.overview || dict.detail.noOverview}
             </p>
-          ) : null}
-        </section>
+            <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-400">
+              {title.releaseYear ? <li className="tabular">{title.releaseYear}</li> : null}
+              {typeof title.rating === 'number' ? (
+                <li className="tabular font-bold text-amber-400">★ {title.rating.toFixed(1)}</li>
+              ) : null}
+              <li>{dict.browse.types[title.type] ?? title.type}</li>
+              <li>{dict.detail.sourceCount(episode.sources.length)}</li>
+            </ul>
+          </aside>
+        </div>
       </main>
     </div>
   );

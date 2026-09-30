@@ -36,7 +36,7 @@ export function SiteHeader({
         <Link href="/" className="me-2 flex items-center gap-2 font-bold tracking-tight">
           <span
             aria-hidden
-            className="grid h-8 w-8 place-items-center rounded-lg bg-brand-600 text-sm font-black text-white"
+            className="grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br from-brand-500 to-brand-800 text-sm font-black text-white shadow-card"
           >
             W
           </span>
