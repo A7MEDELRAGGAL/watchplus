@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { SiteHeader } from '@/components/site-header';
+import { SiteFooter } from '@/components/site-footer';
 import { TitleCard } from '@/components/title-card';
 import { getDictionary } from '@/lib/i18n/config';
 import { getLocale } from '@/lib/i18n/server';
@@ -25,25 +26,33 @@ export default async function SearchPage({
       <SiteHeader locale={locale} dict={dict} user={user} />
 
       <main className="container-page space-y-8 py-8">
-        <h1 className="text-2xl font-bold tracking-tight">{dict.search.title}</h1>
-
-        {/* A plain GET form: the results page is shareable and works with JS off. */}
-        <form action="/search" method="get" role="search" className="flex gap-2">
-          <input
-            type="search"
-            name="q"
-            defaultValue={query}
-            placeholder={dict.search.placeholder}
-            autoFocus
-            className="min-w-0 flex-1 rounded-lg border border-ink-200 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-brand-500 dark:border-ink-700 dark:bg-ink-900"
+        <section className="relative overflow-hidden rounded-3xl border border-ink-200 bg-gradient-to-br from-brand-950 via-ink-900 to-ink-950 p-6 sm:p-8 dark:border-ink-800">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute -start-16 -top-24 h-64 w-64 rounded-full bg-brand-600/25 blur-3xl"
           />
-          <button
-            type="submit"
-            className="shrink-0 rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-700"
-          >
-            {dict.search.submit}
-          </button>
-        </form>
+          <h1 className="text-2xl font-black tracking-tight text-white sm:text-3xl">
+            {dict.search.title}
+          </h1>
+
+          {/* A plain GET form: the results page is shareable and works with JS off. */}
+          <form action="/search" method="get" role="search" className="mt-4 flex gap-2">
+            <input
+              type="search"
+              name="q"
+              defaultValue={query}
+              placeholder={dict.search.placeholder}
+              autoFocus
+              className="min-w-0 flex-1 rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-sm text-white placeholder:text-ink-300 outline-none backdrop-blur transition focus:border-brand-400"
+            />
+            <button
+              type="submit"
+              className="shrink-0 rounded-xl bg-brand-600 px-6 py-3 text-sm font-bold text-white transition hover:bg-brand-500"
+            >
+              {dict.search.submit}
+            </button>
+          </form>
+        </section>
 
         {tooShort ? (
           <p className="text-sm text-ink-500">{dict.search.hint}</p>
@@ -64,6 +73,8 @@ export default async function SearchPage({
           </>
         ) : null}
       </main>
+
+      <SiteFooter dict={dict} />
     </div>
   );
 }

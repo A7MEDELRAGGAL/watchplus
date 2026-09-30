@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { SiteHeader } from '@/components/site-header';
+import { SiteFooter } from '@/components/site-footer';
 import { TitleCard } from '@/components/title-card';
 import { getDictionary } from '@/lib/i18n/config';
 import { getLocale } from '@/lib/i18n/server';
@@ -24,7 +25,22 @@ export default async function WatchlistPage() {
     <div className="min-h-dvh">
       <SiteHeader locale={locale} dict={dict} user={user} />
       <main className="container-page py-10">
-        <h1 className="mb-6 text-2xl font-bold tracking-tight">{dict.library.watchlist}</h1>
+        <header className="mb-6 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-black tracking-tight sm:text-3xl">
+              {dict.library.watchlist}
+            </h1>
+            <p className="tabular mt-1 text-sm text-ink-500 dark:text-ink-400">
+              {titles.length}
+            </p>
+          </div>
+          <Link
+            href="/browse"
+            className="rounded-full border border-ink-200 px-4 py-2 text-xs font-bold transition hover:border-brand-500 hover:text-brand-600 dark:border-ink-700 dark:hover:border-brand-500"
+          >
+            {dict.nav.browse}
+          </Link>
+        </header>
 
         {titles.length === 0 ? (
           <div className="space-y-4">
@@ -46,6 +62,8 @@ export default async function WatchlistPage() {
           </ul>
         )}
       </main>
+
+      <SiteFooter dict={dict} />
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { SiteHeader } from '@/components/site-header';
+import { SiteFooter } from '@/components/site-footer';
 import { TitleCard } from '@/components/title-card';
 import { getDictionary } from '@/lib/i18n/config';
 import { getLocale } from '@/lib/i18n/server';
@@ -51,19 +52,27 @@ export default async function BrowsePage({ searchParams }: { searchParams: Searc
       <SiteHeader locale={locale} dict={dict} user={user} />
 
       <main className="container-page space-y-8 py-8">
-        <header className="flex flex-wrap items-baseline justify-between gap-3">
-          <h1 className="text-2xl font-bold tracking-tight">{dict.browse.title}</h1>
-          <p className="text-sm text-ink-500 dark:text-ink-400">{dict.browse.results(total)}</p>
+        <header className="relative overflow-hidden rounded-3xl border border-ink-200 bg-gradient-to-br from-brand-950 via-ink-900 to-ink-950 p-6 sm:p-8 dark:border-ink-800">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute -end-16 -top-24 h-64 w-64 rounded-full bg-brand-600/25 blur-3xl"
+          />
+          <h1 className="text-2xl font-black tracking-tight text-white sm:text-3xl">
+            {dict.browse.title}
+          </h1>
+          <p className="tabular mt-1 text-sm text-ink-300">{dict.browse.results(total)}</p>
         </header>
 
-        <Filters
-          dict={dict}
-          types={TYPES}
-          genres={genres}
-          years={years}
-          current={current}
-          href={buildHref}
-        />
+        <div className="card space-y-4 p-4 sm:p-5">
+          <Filters
+            dict={dict}
+            types={TYPES}
+            genres={genres}
+            years={years}
+            current={current}
+            href={buildHref}
+          />
+        </div>
 
         {items.length === 0 ? (
           <p className="card p-10 text-center text-sm text-ink-500 dark:text-ink-400">
@@ -80,22 +89,22 @@ export default async function BrowsePage({ searchParams }: { searchParams: Searc
         )}
 
         {pageCount > 1 ? (
-          <nav className="flex items-center justify-center gap-2 pt-4">
+          <nav className="flex items-center justify-center gap-3 pt-4">
             {page > 1 ? (
               <Link
                 href={buildHref(current, { page: String(page - 1) })}
-                className="rounded-lg border border-ink-200 px-3 py-1.5 text-sm dark:border-ink-700"
+                className="rounded-full border border-ink-200 bg-white px-4 py-2 text-sm font-semibold transition hover:border-brand-500 hover:text-brand-600 dark:border-ink-700 dark:bg-ink-900 dark:hover:border-brand-500"
               >
                 {dict.common.back}
               </Link>
             ) : null}
-            <span className="tabular text-sm text-ink-500">
+            <span className="tabular rounded-full bg-ink-100 px-4 py-2 text-sm font-bold dark:bg-ink-800">
               {page} / {pageCount}
             </span>
             {page < pageCount ? (
               <Link
                 href={buildHref(current, { page: String(page + 1) })}
-                className="rounded-lg border border-ink-200 px-3 py-1.5 text-sm dark:border-ink-700"
+                className="rounded-full bg-brand-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-brand-500"
               >
                 ›
               </Link>
@@ -103,6 +112,8 @@ export default async function BrowsePage({ searchParams }: { searchParams: Searc
           </nav>
         ) : null}
       </main>
+
+      <SiteFooter dict={dict} />
     </div>
   );
 }
@@ -122,9 +133,9 @@ function Filters({
   current: SearchParams;
   href: (base: SearchParams, patch: Partial<SearchParams>) => string;
 }) {
-  const chip = 'rounded-lg border px-3 py-1.5 text-xs font-medium transition';
-  const active = `${chip} border-brand-600 bg-brand-600 text-white`;
-  const idle = `${chip} border-ink-200 text-ink-600 hover:bg-ink-100 dark:border-ink-700 dark:text-ink-300 dark:hover:bg-ink-800`;
+  const chip = 'rounded-full border px-3.5 py-1.5 text-xs font-semibold transition';
+  const active = `${chip} border-brand-600 bg-brand-600 text-white shadow-card`;
+  const idle = `${chip} border-ink-200 bg-white text-ink-600 hover:border-brand-400 hover:text-brand-600 dark:border-ink-700 dark:bg-ink-900 dark:text-ink-300 dark:hover:border-brand-500 dark:hover:text-brand-400`;
 
   return (
     <div className="space-y-3">

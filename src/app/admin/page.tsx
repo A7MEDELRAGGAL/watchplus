@@ -7,6 +7,7 @@ import { getLocale } from '@/lib/i18n/server';
 import { requireAdmin } from '@/lib/auth';
 import { allProviders } from '@/lib/scraper/core/registry';
 import { SiteHeader } from '@/components/site-header';
+import { SiteFooter } from '@/components/site-footer';
 
 export const dynamic = 'force-dynamic';
 
@@ -306,6 +307,8 @@ export default async function AdminPage() {
           free-tier runner has no business being triggered by a web request.
         </p>
       </main>
+
+      <SiteFooter dict={dict} />
     </div>
   );
 }

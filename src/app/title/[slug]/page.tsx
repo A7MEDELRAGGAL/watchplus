@@ -2,6 +2,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { notFound, permanentRedirect } from 'next/navigation';
 import { SiteHeader } from '@/components/site-header';
+import { SiteFooter } from '@/components/site-footer';
 import { LibraryButton } from '@/components/library-button';
 import { getDictionary, intlLocale } from '@/lib/i18n/config';
 import { getLocale } from '@/lib/i18n/server';
@@ -55,9 +56,22 @@ export default async function TitlePage({ params }: { params: { slug: string } }
     <div className="min-h-dvh">
       <SiteHeader locale={locale} dict={dict} user={user} />
 
+      {/* cinematic banner */}
+      <div className="relative overflow-hidden border-b border-ink-200 bg-ink-950 dark:border-ink-800">
+        {(title.backdropUrl || title.posterUrl) && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={`/api/img?url=${encodeURIComponent((title.backdropUrl || title.posterUrl)!)}&w=1600&q=70`}
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover opacity-50"
+          />
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-ink-50 via-ink-50/40 to-transparent dark:from-ink-950 dark:via-ink-950/40" />
+      </div>
+
       <main className="container-page space-y-10 py-8">
-        <section className="grid gap-6 md:grid-cols-[240px_1fr]">
-          <div className="relative mx-auto aspect-[2/3] w-full max-w-[240px] overflow-hidden rounded-2xl bg-ink-200 dark:bg-ink-800 md:mx-0">
+        <section className="-mt-24 grid gap-6 sm:grid-cols-[200px_1fr] md:grid-cols-[240px_1fr]">
+          <div className="relative mx-auto aspect-[2/3] w-full max-w-[200px] overflow-hidden rounded-2xl shadow-card-hover ring-1 ring-black/10 sm:mx-0 md:max-w-[240px] dark:ring-white/10">
             {title.posterUrl ? (
               <Image
                 src={title.posterUrl}
@@ -67,6 +81,11 @@ export default async function TitlePage({ params }: { params: { slug: string } }
                 className="object-cover"
                 priority
               />
+            ) : null}
+            {typeof title.rating === 'number' ? (
+              <span className="tabular absolute end-2 top-2 rounded-lg bg-black/70 px-2 py-1 text-sm font-black text-amber-300 backdrop-blur">
+                ★ {title.rating.toFixed(1)}
+              </span>
             ) : null}
           </div>
 
@@ -83,19 +102,28 @@ export default async function TitlePage({ params }: { params: { slug: string } }
               ) : null}
             </div>
 
-            <ul className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-ink-600 dark:text-ink-300">
-              {title.releaseYear ? <li className="tabular">{title.releaseYear}</li> : null}
-              {typeof title.rating === 'number' ? (
-                <li className="tabular font-semibold text-amber-500">★ {title.rating.toFixed(1)}</li>
+            <ul className="flex flex-wrap items-center gap-2 text-xs font-semibold">
+              {title.releaseYear ? (
+                <li className="tabular rounded-full bg-ink-100 px-3 py-1 dark:bg-ink-800">
+                  {title.releaseYear}
+                </li>
               ) : null}
+              <li className="rounded-full bg-ink-100 px-3 py-1 dark:bg-ink-800">
+                {dict.browse.types[title.type] ?? title.type}
+              </li>
+              <li
+                className={`rounded-full px-3 py-1 text-white ${title.isOngoing ? 'bg-brand-600' : 'bg-ink-500'}`}
+              >
+                {title.isOngoing ? dict.detail.ongoing : dict.detail.ended}
+              </li>
+              <li className="tabular rounded-full bg-ink-100 px-3 py-1 dark:bg-ink-800">
+                {dict.detail.sourceCount(title.sources.length)}
+              </li>
               {title.runtimeMin ? (
-                <li className="tabular">
+                <li className="tabular rounded-full bg-ink-100 px-3 py-1 dark:bg-ink-800">
                   {title.runtimeMin} {dict.common.min}
                 </li>
               ) : null}
-              <li>{dict.browse.types[title.type] ?? title.type}</li>
-              <li>{title.isOngoing ? dict.detail.ongoing : dict.detail.ended}</li>
-              <li>{dict.detail.sourceCount(title.sources.length)}</li>
             </ul>
 
             {title.genres.length > 0 ? (
@@ -117,9 +145,9 @@ export default async function TitlePage({ params }: { params: { slug: string } }
               {firstPlayable ? (
                 <Link
                   href={`/watch/${title.slug}/${seasonOf(title.seasons, firstPlayable.id)}/${firstPlayable.number}`}
-                  className="rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-700"
+                  className="rounded-xl bg-gradient-to-l from-brand-500 to-brand-700 px-6 py-3 text-sm font-black text-white shadow-card transition hover:brightness-110"
                 >
-                  {dict.detail.watchNow}
+                  ▶ {dict.detail.watchNow}
                 </Link>
               ) : null}
 
@@ -216,6 +244,8 @@ export default async function TitlePage({ params }: { params: { slug: string } }
 
         <Episodes title={title} dict={dict} />
       </main>
+
+      <SiteFooter dict={dict} />
     </div>
   );
 }

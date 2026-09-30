@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound, permanentRedirect } from 'next/navigation';
 import { SiteHeader } from '@/components/site-header';
+import { SiteFooter } from '@/components/site-footer';
 import { VideoPlayer } from '@/components/video-player';
 import { getDictionary } from '@/lib/i18n/config';
 import { getLocale } from '@/lib/i18n/server';
@@ -217,6 +218,8 @@ export default async function WatchPage({ params }: { params: Params }) {
           </aside>
         </div>
       </main>
+
+      <SiteFooter dict={dict} />
     </div>
   );
 }

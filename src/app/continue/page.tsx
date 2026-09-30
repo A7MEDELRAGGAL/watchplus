@@ -3,6 +3,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { redirect } from 'next/navigation';
 import { SiteHeader } from '@/components/site-header';
+import { SiteFooter } from '@/components/site-footer';
 import { getDictionary } from '@/lib/i18n/config';
 import { getLocale } from '@/lib/i18n/server';
 import { getSessionUser } from '@/lib/auth';
@@ -28,7 +29,7 @@ export default async function ContinuePage() {
     <div className="min-h-dvh">
       <SiteHeader locale={locale} dict={dict} user={user} />
       <main className="container-page py-10">
-        <h1 className="mb-6 text-2xl font-bold tracking-tight">
+        <h1 className="mb-6 text-2xl font-black tracking-tight sm:text-3xl">
           {dict.library.continueWatching}
         </h1>
 
@@ -80,6 +81,8 @@ export default async function ContinuePage() {
           </ul>
         )}
       </main>
+
+      <SiteFooter dict={dict} />
     </div>
   );
 }

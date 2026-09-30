@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { SiteHeader } from '@/components/site-header';
+import { SiteFooter } from '@/components/site-footer';
 import { HeroSlider } from '@/components/hero-slider';
 import { TitleCard, TitleRow } from '@/components/title-card';
 import { getDictionary, intlLocale } from '@/lib/i18n/config';
@@ -90,14 +91,7 @@ export default async function HomePage() {
         )}
       </main>
 
-      <footer className="mt-16 border-t border-ink-200 py-8 dark:border-ink-800">
-        <div className="container-page flex flex-wrap items-center justify-between gap-3 text-xs text-ink-500 dark:text-ink-400">
-          <p>
-            © {new Date().getFullYear()} {dict.siteName} — {dict.footer.rights}
-          </p>
-          <p>{dict.footer.about}</p>
-        </div>
-      </footer>
+      <SiteFooter dict={dict} />
     </div>
   );
 }
