@@ -23,6 +23,7 @@
     "merge:dups": "tsx scripts/merge-duplicates.ts",
     "fix:stills": "tsx scripts/backfill-stills.ts",
     "fix:mojibake": "tsx scripts/fix-mojibake.ts",
+    "test:e2e": "tsx scripts/account-e2e.ts",
     "fix:epnums": "tsx scripts/fix-epnums.ts",
     "fix:meta": "tsx scripts/fix-meta.ts",
     "import:scraper": "tsx scripts/import-scraper.ts",

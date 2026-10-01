@@ -134,6 +134,29 @@ export function EpisodeView({
     () => filterServers(downloads, { quality, site, showDead }),
     [downloads, quality, site, showDead],
   );
+  const hasWalled = useMemo(
+    () => sorted.some((s) => s.provider === 'drive' || s.provider === '4shared'),
+    [sorted],
+  );
+
+  // اختصارات: F ملء الشاشة، N التالي (للفيديو المباشر)
+  const frameRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const tag = (document.activeElement?.tagName || '').toLowerCase();
+      if (tag === 'input' || tag === 'textarea') return;
+      if (e.key === 'f' || e.key === 'F') {
+        const el = frameRef.current;
+        if (!el) return;
+        if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
+        else void el.requestFullscreen?.().catch(() => {});
+      } else if ((e.key === 'n' || e.key === 'N') && nextHref) {
+        window.location.href = nextHref;
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [nextHref]);
   const selected = sorted.find((s) => s.id === selectedId) ?? null;
   const playable = selected && (selected.status === 'active' || selected.status === 'suspect') ? selected : null;
   const deadCount = sorted.filter((s) => s.status === 'dead').length;
@@ -274,7 +297,7 @@ export function EpisodeView({
   return (
     <div className="space-y-6">
       {/* المشغّل */}
-      <div className="overflow-hidden rounded-3xl border border-ink-800 bg-black">
+      <div ref={frameRef} className="overflow-hidden rounded-3xl border border-ink-800 bg-black">
         <div className="relative aspect-video w-full">
           {!playable || !src ? (
             <div className="grid h-full place-items-center p-6 text-center text-sm text-ink-400">
@@ -419,6 +442,13 @@ export function EpisodeView({
           >
             {showDead ? labels.hideDead : `${labels.showDead} (${deadCount})`}
           </button>
+        ) : null}
+        {hasWalled ? (
+          <p className="rounded-xl border border-amber-800 bg-amber-950 px-3 py-2 text-[11px] leading-relaxed text-amber-300">
+            {locale === 'ar'
+              ? 'ملاحظة: سيرفرات Google Drive قد تطلب تسجيل الدخول عند تجاوز الحصة — جرّب سيرفرًا آخر أولًا.'
+              : 'Note: Google Drive servers may ask for sign-in when quota is hit — try another server first.'}
+          </p>
         ) : null}
       </section>
 
