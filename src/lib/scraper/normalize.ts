@@ -369,7 +369,7 @@ export function isJunkLabel(s: string): boolean {
 export function mergeKey(title: string): string {
   return (title || '')
     .toLowerCase()
-    .replace(/×/g, 'x') // U+00D7 → x
+    .replace(/\u00D7/g, ' x ') // U+00D7 → x
     .replace(/\([^)]*\)/g, ' ')
     .replace(/[^\p{L}\p{N}\s]/gu, ' ')
     .split(/\s+/)
