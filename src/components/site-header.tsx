@@ -34,7 +34,7 @@ export function SiteHeader({
     : [];
 
   return (
-    <header className="sticky top-0 z-40 border-b border-ink-200/80 bg-ink-50/85 backdrop-blur dark:border-ink-800 dark:bg-ink-950/85">
+    <header className="sticky top-0 z-40 border-b border-ink-200/80 bg-ink-50/95 backdrop-blur-md dark:border-ink-800 dark:bg-ink-950/95">
       <div className="container-page flex h-16 items-center gap-2">
         <Link href="/" className="me-2 flex items-center gap-2 font-black tracking-tight">
           <Logo size={32} />

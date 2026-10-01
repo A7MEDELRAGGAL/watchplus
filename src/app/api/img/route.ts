@@ -85,8 +85,15 @@ export async function GET(request: NextRequest) {
   const ttl = Math.min(60 * 60 * 24 * 30, Number(process.env.IMAGE_PROXY_TTL) || 60 * 60 * 24);
 
   const upstream = new URL(target.toString());
-  upstream.searchParams.set('w', String(width));
-  upstream.searchParams.set('q', String(quality));
+  // الروابط الموقعة (token/expires/signature) حساسة لأي بارامتر زائد —
+  // إلحاق w/q قد يُبطل التوقيع فيُرجع 403. تُمرر كما هي.
+  const signed = [...upstream.searchParams.keys()].some((k) =>
+    /^(token|expires?|sig(nature)?|sign|auth|key|st|e)$/i.test(k),
+  );
+  if (!signed) {
+    upstream.searchParams.set('w', String(width));
+    upstream.searchParams.set('q', String(quality));
+  }
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
