@@ -41,7 +41,7 @@ export async function POST(_request: Request, { params }: { params: { id: string
     if (dup.length === 0) {
       await prisma.$executeRawUnsafe(
         `INSERT INTO "refresh_queue"("site","watch_url","reason","status","requested_at")
-         VALUES($1,$2,'expired','pending',NOW().toISOString())`,
+               VALUES($1,$2,'expired','pending',NOW()::text)`,
         src.provider,
         target,
       );
