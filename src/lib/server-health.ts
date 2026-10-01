@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db';
+import { isActuallyExpired } from '@/lib/servers';
 
 const STRIKES_TO_DIE = 3;
 
@@ -50,15 +51,16 @@ export async function applyProbe(
 ): Promise<{ fails: number; isDead: boolean }> {
   const src = await prisma.episodeSource.findUnique({
     where: { id },
-    select: { headers: true, isDead: true },
+    select: { headers: true, isDead: true, url: true, streamUrl: true },
   });
   if (!src) return { fails: 0, isDead: false };
   const fails = reachable ? 0 : readFails(src.headers) + 1;
   const isDead = reachable ? false : fails >= STRIKES_TO_DIE ? true : src.isDead;
+  const expired = isActuallyExpired(src.streamUrl || src.url);
   const headers =
-    fails <= 0
+    fails <= 0 && !expired
       ? null
-      : JSON.stringify({ v: 1, fails, ...(reachable ? {} : keepReports(src.headers)) });
+      : JSON.stringify({ v: 1, fails, ...(expired ? { exp: true } : {}), ...(reachable ? {} : keepReports(src.headers)) });
   await prisma.episodeSource.update({
     where: { id },
     data: { isDead, headers, lastSyncedAt: new Date() },

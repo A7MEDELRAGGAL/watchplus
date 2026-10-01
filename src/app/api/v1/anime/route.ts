@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { displayTitle } from '@/lib/queries';
+import { LIVE_SOURCE_WHERE } from '@/lib/servers';
 import { isLocale } from '@/lib/i18n/config';
 
 export const dynamic = 'force-dynamic';
@@ -30,7 +31,7 @@ export async function GET(request: Request) {
     ...(status === 'COMPLETED' ? { isOngoing: false } : {}),
     ...(status === 'ONGOING' ? { isOngoing: true } : {}),
     ...(available
-      ? { seasons: { some: { episodes: { some: { sources: { some: { isDead: false } } } } } } }
+      ? { seasons: { some: { episodes: { some: { sources: { some: LIVE_SOURCE_WHERE } } } } } }
       : {}),
     ...(q.length >= 2
       ? { OR: [{ searchBlob: { contains: q } }, { originalTitle: { contains: q, mode: 'insensitive' as const } }] }

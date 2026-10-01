@@ -44,7 +44,7 @@ export function parseExpiry(target: string): string | null {
 }
 
 /**
- * منتهٍ فعلًا = طابع expires ماضٍ فقط. الرابط الموقّع بتاريخ مستقبلي
+ * المنتهي فعلًا = طابع expires ماضٍ فقط. الرابط الموقّع بتاريخ مستقبلي
  * يعمل الآن (صالح) — التوقيع وحده ليس موتًا.
  */
 export function isActuallyExpired(target: string): boolean {
@@ -52,6 +52,15 @@ export function isActuallyExpired(target: string): boolean {
   if (!iso) return false;
   return new Date(iso).getTime() <= Date.now();
 }
+
+/**
+ * شرط Prisma للمصدر الحي الحقيقي: غير ميت + غير موسوم منتهٍ.
+ * وسم exp يُكتب في headers JSON عند الفحص/الاستيراد ({"v":1,"fails":n,"exp":true}).
+ */
+export const LIVE_SOURCE_WHERE = {
+  isDead: false,
+  OR: [{ headers: null }, { NOT: { headers: { contains: '"exp":true' } } }],
+};
 
 export function hostOf(url: string | null): string | null {
   if (!url) return null;

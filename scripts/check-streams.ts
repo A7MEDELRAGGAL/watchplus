@@ -15,6 +15,7 @@
  */
 import 'dotenv/config';
 import { prisma } from '../src/lib/db';
+import { isActuallyExpired } from '../src/lib/servers';
 
 const CONCURRENCY = 8;
 const TIMEOUT_MS = 15000;
@@ -76,8 +77,19 @@ function readFails(headers: string | null): number {
   }
 }
 
-function writeFails(headers: string | null, fails: number): string | null {
-  if (fails <= 0) {
+/** هل موسوم منتهٍ حاليًا؟ */
+function hasExpFlag(headers: string | null): boolean {
+  if (!headers) return false;
+  try {
+    const j = JSON.parse(headers) as { v?: number; exp?: unknown };
+    return j?.v === 1 && j.exp === true;
+  } catch {
+    return false;
+  }
+}
+
+function writeFails(headers: string | null, fails: number, expired = false): string | null {
+  if (fails <= 0 && !expired) {
     if (!headers) return null;
     try {
       const j = JSON.parse(headers) as { v?: number };
@@ -85,7 +97,15 @@ function writeFails(headers: string | null, fails: number): string | null {
     } catch { /* real data below */ }
     return headers; // someone else's headers — leave them
   }
-  return JSON.stringify({ v: 1, fails });
+  const base: Record<string, unknown> = { v: 1, fails };
+  if (expired) base.exp = true;
+  try {
+    const j = JSON.parse(headers ?? '{}') as { reports?: unknown };
+    if (Array.isArray((j as { reports?: unknown }).reports)) {
+      base.reports = ((j as { reports?: unknown[] }).reports ?? []).slice(-10);
+    }
+  } catch { /* ignore */ }
+  return JSON.stringify(base);
 }
 
 async function main() {
@@ -127,7 +147,7 @@ async function main() {
         const target = s.streamUrl || s.url;
         if (!target || !/^https?:\/\//i.test(target)) return { s, skip: true as const };
         if (isSkippable(target)) return { s, skip: true as const };
-        return { s, failed: isDeadResult(await fetchText(target)) };
+        return { s, target, failed: isDeadResult(await fetchText(target)) };
       }),
     );
     for (const r of results) {
@@ -136,14 +156,15 @@ async function main() {
         continue;
       }
       const fails = readFails(r.s.headers);
+      const expired = isActuallyExpired(r.target);
       if (!r.failed) {
         alive += 1;
-        // النجاح يعيده active دائمًا (إحياء) ويصفّر الضربات
-        if (r.s.isDead || fails > 0) {
+        // النجاح يعيده active دائمًا (إحياء) ويصفّر الضربات — مع تحديث وسم الانتهاء
+        if (r.s.isDead || fails > 0 || expired !== hasExpFlag(r.s.headers)) {
           resurrected += r.s.isDead ? 1 : 0;
           await prisma.episodeSource.update({
             where: { id: r.s.id },
-            data: { isDead: false, headers: writeFails(r.s.headers, 0), lastSyncedAt: new Date() },
+            data: { isDead: false, headers: writeFails(r.s.headers, 0, expired), lastSyncedAt: new Date() },
           });
         }
         continue;
@@ -153,13 +174,13 @@ async function main() {
         if (!r.s.isDead) dead += 1;
         await prisma.episodeSource.update({
           where: { id: r.s.id },
-          data: { isDead: true, headers: writeFails(r.s.headers, next), lastSyncedAt: new Date() },
+          data: { isDead: true, headers: writeFails(r.s.headers, next, expired), lastSyncedAt: new Date() },
         });
       } else {
         suspects += 1; // مشتبه (1-2 ضربات) — يبقى ظاهرًا حتى الضربة الثالثة
         await prisma.episodeSource.update({
           where: { id: r.s.id },
-          data: { headers: writeFails(r.s.headers, next), lastSyncedAt: new Date() },
+          data: { headers: writeFails(r.s.headers, next, expired), lastSyncedAt: new Date() },
         });
       }
     }

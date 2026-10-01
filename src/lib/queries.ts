@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/db';
 import { fromJsonText } from '@/lib/db-json';
-import { isActuallyExpired } from '@/lib/servers';
+import { isActuallyExpired, LIVE_SOURCE_WHERE } from '@/lib/servers';
 import type { Prisma } from '@prisma/client';
 
 /**
@@ -107,10 +107,11 @@ export type HomeRows = [
 /**
  * Home quality gate: a card without a poster or without a single playable
  * episode never reaches the front page (no more empty/broken cards).
+ * "Playable" = live AND not flagged expired (headers exp flag from checker).
  */
 const DISPLAYABLE = {
   posterUrl: { not: null },
-  seasons: { some: { episodes: { some: { sources: { some: { isDead: false } } } } } },
+  seasons: { some: { episodes: { some: { sources: { some: LIVE_SOURCE_WHERE } } } } },
 } as const;
 
 export async function getRows(limit = 20): Promise<HomeRows> {
@@ -199,7 +200,7 @@ export async function listTitles(args: BrowseArgs = {}) {
       ? { rating: { gte: args.minRating } }
       : {}),
     ...(args.available
-      ? { seasons: { some: { episodes: { some: { sources: { some: { isDead: false } } } } } } }
+      ? { seasons: { some: { episodes: { some: { sources: { some: LIVE_SOURCE_WHERE } } } } } }
       : {}),
     // genres is JSON text, so the facet is matched on the stored slug. It is an
     // index-less LIKE, which is acceptable at this catalogue size; a real

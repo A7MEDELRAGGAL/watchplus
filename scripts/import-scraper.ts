@@ -21,6 +21,7 @@ import 'dotenv/config';
 import { prisma } from '../src/lib/db';
 import { mergeKey, isJunkTitle } from '../src/lib/scraper/normalize';
 import { cleanEpisodeName, seasonRank, seriesKey } from '../src/lib/queries';
+import { isActuallyExpired } from '../src/lib/servers';
 
 interface ScSeries { id: number; canonical_title: string; slug: string }
 interface ScRelease { id: number; series_id: number; kind: string; season_number: number | null; title: string }
@@ -276,6 +277,7 @@ async function main() {
           }
           const stable = srv.ep_url || srv.url;
           const isMp4 = /\.mp4(\?|$)/i.test(srv.url.split('?')[0]);
+          const expired = isActuallyExpired(srv.url);
           const data = {
             provider: srv.provider || 'unknown',
             url: stable,
@@ -284,6 +286,7 @@ async function main() {
             quality: srv.quality?.trim() || null,
             language: 'ar',
             isDead: false,
+            headers: expired ? JSON.stringify({ v: 1, fails: 0, exp: true }) : null,
             lastSyncedAt: new Date(),
           };
           if (go) {
