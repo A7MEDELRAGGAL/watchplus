@@ -315,6 +315,38 @@ async function main() {
   const afterEp = go ? await prisma.episode.count() : beforeEp;
   console.log(`\nbefore: titles=${beforeTitle} episodes=${beforeEp} sources=${beforeSrc}`);
   console.log(`after:  titles=${afterTitle} episodes=${afterEp} sources=${afterSrc}`);
+
+  // الجسر: طلبات التجديد المعلّمة في headers → صفوف refresh_queue بسكيما السكرابر
+  if (go) {
+    try {
+      const flagged = (await prisma.$queryRawUnsafe(
+        `SELECT s.id, s.provider, COALESCE(s."streamUrl", s.url) u FROM "EpisodeSource" s
+         WHERE s.headers LIKE '%refreshRequested%'`)) as { id: string; provider: string; u: string }[];
+      let bridged = 0;
+      for (const f of flagged) {
+        try {
+          const dup = (await prisma.$queryRawUnsafe(
+            `SELECT id FROM "refresh_queue" WHERE watch_url=$1 AND status='pending' LIMIT 1`,
+            f.u,
+          )) as unknown[];
+          if (dup.length === 0) {
+            await prisma.$executeRawUnsafe(
+              `INSERT INTO "refresh_queue"("site","watch_url","reason","status","requested_at")
+               VALUES($1,$2,'expired','pending',NOW().toISOString())`,
+              f.provider,
+              f.u,
+            );
+            bridged += 1;
+          }
+        } catch { /* per-row failure never aborts */ }
+      }
+      const q = await prisma.$queryRawUnsafe(
+        `SELECT COUNT(*) c FROM "refresh_queue" WHERE status='pending'`) as { c: bigint }[];
+      console.log(`refresh bridge: flagged=${flagged.length} bridged-new=${bridged} queue-pending=${q[0].c.toString()}`);
+    } catch {
+      console.log('refresh bridge: table absent — skipped');
+    }
+  }
   console.log(`new titles=${newTitles} new seasons=${newSeasons} new episodes=${newEps} upserted servers=${upserted} skipped=${skipped}`);
   console.log(`review (${review.length}):`);
   for (const r of review.slice(0, 25)) console.log(`  … ${r}`);
