@@ -46,7 +46,8 @@ export default async function BrowsePage({ searchParams }: { searchParams: Searc
     year: Number.isFinite(year) ? year : undefined,
     sort,
     page: searchParams.page ? Number(searchParams.page) : 1,
-    available: searchParams.available === '1',
+    // الافتراضي: القابل للمشاهدة فقط (الكتالوج الفارغ يُرى بزر "الكل")
+    available: searchParams.available === '0' ? false : true,
     minRating: typeof minRating === 'number' && Number.isFinite(minRating) ? minRating : undefined,
   });
 
@@ -185,10 +186,12 @@ function Filters({
           {locale === 'ar' ? 'الحالة' : 'Status'}
         </span>
         <Link
-          href={href(current, { available: current.available === '1' ? undefined : '1', page: undefined })}
-          className={current.available === '1' ? active : idle}
+          href={href(current, { available: current.available === '0' ? undefined : '0', page: undefined })}
+          className={current.available === '0' ? idle : active}
         >
-          {locale === 'ar' ? 'متاح للمشاهدة ✓' : 'Watchable ✓'}
+          {current.available === '0'
+            ? (locale === 'ar' ? 'الكل (حتى الفارغ)' : 'All (incl. empty)')
+            : (locale === 'ar' ? 'متاح للمشاهدة ✓' : 'Watchable ✓')}
         </Link>
         {[7, 8].map((r) => (
           <Link

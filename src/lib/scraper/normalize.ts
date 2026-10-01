@@ -240,9 +240,9 @@ export function shortHash(input: string): string {
 // السلاج لا يتغير أبدًا — الروابط القديمة تظل سليمة.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** كلمات لا تصنع عنوانًا وحدها: مواسم/حلقات/أنواع. */
+/** كلمات لا تصنع عنوانًا وحدها: مواسم/حلقات/أنواع/تنقل. */
 const JUNK_WORDS =
-  /^(الموسم|موسم|الحلقة|حلقة|حلقات|مسلسل|فيلم|خاصة|اسبشل|سبيشل|special|tv|anime|season|episode|ep|أونا|اونا|أوفا|اوفا|الجزء|جزء|الموسم|انمي|الأنمي|تلفزيونية|مدبلج|مترجم|مترجمة|كامل|جميع|الحلقات|اونلاين)$/i;
+  /^(الموسم|موسم|الحلقة|حلقة|حلقات|مسلسل|فيلم|خاصة|اسبشل|سبيشل|special|tv|anime|season|episode|ep|أونا|اونا|أوفا|اوفا|الجزء|جزء|الموسم|انمي|الأنمي|تلفزيونية|مدبلج|مترجم|مترجمة|كامل|جميع|الحلقات|اونلاين|قائمة|قائمه|القائمة|القائمه|قوائم|رئيسية|رئيسيه|الرئيسية|الرئيسيه|شاهد|المزيد|عرض|الكل|تصفح)$/i;
 
 /** علامات label-الحلقة: وجودها مع بقايا اسم يعني العنوان مختلط يحتاج تنظيفًا. */
 const EP_MARKERS = /(حلقة|الحلقة|موسم|الموسم)/;
@@ -314,6 +314,8 @@ export function titleFromUrlSlug(url: string): string | null {
   try {
     const clean = url.split('?')[0].replace(/\/+$/, '');
     const tail = clean.split('/').pop() || '';
+    // صفحات عامة (watch.php/index/list) ليست أسماء أعمال — تُرفض
+    if (/^(watch|index|main|home|list|lists|titles|page|php|html?)$/i.test(tail.replace(/\.\w+$/, ''))) return null;
     const words = tail
       .replace(/[-_]+/g, ' ')
       .split(/\s+/)
@@ -367,6 +369,7 @@ export function isJunkLabel(s: string): boolean {
 export function mergeKey(title: string): string {
   return (title || '')
     .toLowerCase()
+    .replace(/×/g, 'x') // U+00D7 → x
     .replace(/\([^)]*\)/g, ' ')
     .replace(/[^\p{L}\p{N}\s]/gu, ' ')
     .split(/\s+/)

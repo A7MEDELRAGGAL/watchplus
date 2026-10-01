@@ -8,7 +8,16 @@ import { getDictionary, intlLocale } from '@/lib/i18n/config';
 import { getLocale } from '@/lib/i18n/server';
 import { getSessionUser } from '@/lib/auth';
 import { isInLibrary } from '@/lib/library';
-import { displayTitle, getTitleBySlug, canonicalSlug, getRelatedTitles, hasLive, cleanEpisodeName, displaySeasonNumber } from '@/lib/queries';
+import { displayTitle, getTitleBySlug, canonicalSlug, getRelatedTitles, hasLive, cleanEpisodeName, displaySeasonNumber, seasonRank } from '@/lib/queries';
+
+/** شارة نوع الإصدار: فيلم/أوفا/موسم N — لتمييز الأنواع بصريًا. */
+function releaseBadge(originalTitle: string, type: string, locale: 'ar' | 'en'): string {
+  if (type === 'MOVIE' || /فيلم|film|movie/i.test(originalTitle)) return locale === 'ar' ? 'فيلم' : 'Movie';
+  if (/ova|ona|خاصة|اسبشل|سبيشل|special/i.test(originalTitle)) return locale === 'ar' ? 'خاصة' : 'Special';
+  const n = seasonRank(originalTitle);
+  if (n >= 1 && n <= 20) return locale === 'ar' ? `الموسم ${n}` : `S${n}`;
+  return locale === 'ar' ? 'مرتبطة' : 'Related';
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -88,22 +97,36 @@ export default async function TitlePage({ params }: { params: { slug: string } }
             ) : null}
           </div>
 
-          <div className="space-y-4">
+          <div className="min-w-0 space-y-4">
             <div className="space-y-2">
               <h1 className="break-words text-3xl font-black tracking-tight sm:text-4xl">{name}</h1>
-              {title.titleNative ? (
-                <p dir="ltr" className="text-start text-sm text-ink-500 dark:text-ink-400">
-                  {title.titleNative}
-                </p>
-              ) : null}
-              {locale === 'ar' && title.titleEn && title.titleEn !== name ? (
-                <p dir="ltr" className="text-start text-sm text-ink-500 dark:text-ink-400">
-                  {title.titleEn}
-                </p>
-              ) : null}
-              {locale === 'en' && title.titleAr && title.titleAr !== name ? (
-                <p className="text-sm text-ink-500 dark:text-ink-400">{title.titleAr}</p>
-              ) : null}
+              {/* الأسماء الثلاثية منظمة: عربي / إنجليزي / ياباني */}
+              <ul className="space-y-1 text-sm">
+                {locale !== 'ar' && title.titleAr && title.titleAr !== name ? (
+                  <li className="flex gap-2">
+                    <span className="shrink-0 rounded bg-ink-100 px-1.5 py-0.5 text-[10px] font-black text-ink-500 dark:bg-ink-800">
+                      عربي
+                    </span>
+                    <span className="text-ink-600 dark:text-ink-300">{title.titleAr}</span>
+                  </li>
+                ) : null}
+                {locale !== 'en' && title.titleEn && title.titleEn !== name ? (
+                  <li dir="ltr" className="flex gap-2 text-start">
+                    <span className="shrink-0 rounded bg-ink-100 px-1.5 py-0.5 text-[10px] font-black text-ink-500 dark:bg-ink-800">
+                      EN
+                    </span>
+                    <span className="text-ink-600 dark:text-ink-300">{title.titleEn}</span>
+                  </li>
+                ) : null}
+                {title.titleNative ? (
+                  <li dir="ltr" className="flex gap-2 text-start">
+                    <span className="shrink-0 rounded bg-ink-100 px-1.5 py-0.5 text-[10px] font-black text-ink-500 dark:bg-ink-800">
+                      JP
+                    </span>
+                    <span className="text-ink-600 dark:text-ink-300">{title.titleNative}</span>
+                  </li>
+                ) : null}
+              </ul>
             </div>
 
             <ul className="flex flex-wrap items-center gap-2 text-xs font-semibold">
@@ -220,7 +243,7 @@ export default async function TitlePage({ params }: { params: { slug: string } }
                 <h2 className="text-sm font-bold uppercase tracking-wide text-ink-500">
                   {dict.detail.cast}
                 </h2>
-                <ul className="flex gap-4 overflow-x-auto pb-2">
+                <ul className="rail flex max-w-full gap-4 overflow-x-auto pb-2">
                   {title.cast.slice(0, 16).map((c, i) => (
                     <li key={`${c.name}-${i}`} className="w-24 shrink-0 text-center">
                       <div className="relative mx-auto aspect-square w-24 overflow-hidden rounded-full bg-ink-200 dark:bg-ink-800">
@@ -271,6 +294,9 @@ export default async function TitlePage({ params }: { params: { slug: string } }
                           className="object-cover transition duration-300 group-hover:scale-105"
                         />
                       ) : null}
+                      <span className="absolute bottom-1.5 start-1.5 rounded-md bg-black/70 px-1.5 py-0.5 text-[10px] font-bold text-white backdrop-blur">
+                        {releaseBadge(r.originalTitle, r.type, locale)}
+                      </span>
                     </div>
                     <p className="mt-1.5 line-clamp-2 text-xs font-bold group-hover:text-brand-500">
                       {displayTitle(r, locale)}

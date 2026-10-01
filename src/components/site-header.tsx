@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { LocaleToggle } from '@/components/locale-toggle';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { SearchBox } from '@/components/search-box';
+import { Logo } from '@/components/logo';
 import { NavLink } from '@/components/nav-link';
 import { LogoutButton } from '@/components/library-button';
 import type { Session } from '@/lib/auth';
@@ -35,13 +36,8 @@ export function SiteHeader({
   return (
     <header className="sticky top-0 z-40 border-b border-ink-200/80 bg-ink-50/85 backdrop-blur dark:border-ink-800 dark:bg-ink-950/85">
       <div className="container-page flex h-16 items-center gap-2">
-        <Link href="/" className="me-2 flex items-center gap-2 font-bold tracking-tight">
-          <span
-            aria-hidden
-            className="grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br from-brand-500 to-brand-800 text-sm font-black text-white shadow-card"
-          >
-            W
-          </span>
+        <Link href="/" className="me-2 flex items-center gap-2 font-black tracking-tight">
+          <Logo size={32} />
           <span className="hidden sm:inline">{dict.siteName}</span>
         </Link>
 

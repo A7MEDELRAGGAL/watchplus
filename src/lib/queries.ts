@@ -405,6 +405,7 @@ const SEASON_MARKERS =
 export function seriesKey(title: string): string {
   return title
     .toLowerCase()
+    .replace(/×/g, 'x') // U+00D7 → x (HUNTER×HUNTER = Hunter x Hunter)
     .replace(/[^\p{L}\p{N}\s]/gu, ' ')
     .replace(SEASON_MARKERS, ' ')
     .replace(/\b\d+\b/g, ' ')

@@ -107,9 +107,14 @@ const STATUS_ORDER: Record<ServerStatus, number> = {
   dead: 3,
 };
 
-/** الترتيب: active ← suspect ← expired ← dead (الميت آخرًا ومخفي افتراضيًا). */
-export function sortServers<T extends { status: ServerStatus }>(rows: T[]): T[] {
-  return [...rows].sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status]);
+/** مضيفون بجدار (حصص/تسجيل) — يُعرضون آخرًا دائمًا. */
+const WALLED_HOSTS = ['drive', '4shared'];
+
+/** ترتيب العرض: الحالة أولًا، ثم المضيفون المسوّرون (drive/4shared) آخرًا. */
+export function sortServers<T extends ClassifiedServer>(rows: T[]): T[] {
+  const rank = (s: T) =>
+    STATUS_ORDER[s.status] * 100 + (WALLED_HOSTS.includes(s.provider) ? 50 : 0);
+  return [...rows].sort((a, b) => rank(a) - rank(b));
 }
 
 export interface ServerFilters {

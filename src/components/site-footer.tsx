@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { Logo } from '@/components/logo';
 import type { Dict } from '@/lib/i18n/config';
 
 /** فوتر موحّد لكل الصفحات: روابط أقسام + أنواع + هوية. */
@@ -9,12 +10,7 @@ export function SiteFooter({ dict }: { dict: Dict }) {
       <div className="container-page grid gap-8 sm:grid-cols-3">
         <div className="space-y-3">
           <p className="flex items-center gap-2 font-black tracking-tight">
-            <span
-              aria-hidden
-              className="grid h-7 w-7 place-items-center rounded-lg bg-gradient-to-br from-brand-500 to-brand-800 text-xs font-black text-white"
-            >
-              W
-            </span>
+            <Logo size={28} />
             {dict.siteName}
           </p>
           <p className="max-w-xs text-xs leading-relaxed text-ink-500 dark:text-ink-400">

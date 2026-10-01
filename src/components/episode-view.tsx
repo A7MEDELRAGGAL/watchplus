@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   filterServers,
   pickDefault,
+  sortServers,
   isReportCategory,
   type ClassifiedServer,
 } from '@/lib/servers';
@@ -71,14 +72,7 @@ export function EpisodeView({
   startAt?: number;
   signedIn?: boolean;
 }) {
-  const sorted = useMemo(
-    () =>
-      [...servers].sort((a, b) => {
-        const o: Record<string, number> = { active: 0, suspect: 1, expired: 2, dead: 3 };
-        return o[a.status] - o[b.status];
-      }),
-    [servers],
-  );
+  const sorted = useMemo(() => sortServers(servers), [servers]);
   // المشاهدة: الكل (mp4 يشتغل أيضًا) — التحميل: المباشر فقط
   const downloads = useMemo(() => sorted.filter((s) => s.isDownload), [sorted]);
 

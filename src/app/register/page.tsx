@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { SiteHeader } from '@/components/site-header';
 import { SiteFooter } from '@/components/site-footer';
+import { Logo } from '@/components/logo';
 import { AuthForm } from '@/components/auth-form';
 import { getDictionary } from '@/lib/i18n/config';
 import { getLocale } from '@/lib/i18n/server';
@@ -26,11 +27,8 @@ export default async function RegisterPage() {
       <main className="container-page flex justify-center py-16">
         <div className="card w-full max-w-sm space-y-6 p-6 sm:p-8">
           <div className="text-center">
-            <span
-              aria-hidden
-              className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-brand-500 to-brand-800 text-lg font-black text-white shadow-card"
-            >
-              W
+            <span className="mx-auto block w-fit">
+              <Logo size={48} />
             </span>
             <h1 className="mt-4 text-2xl font-black tracking-tight">{dict.auth.signUp}</h1>
           </div>

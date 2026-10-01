@@ -231,16 +231,32 @@ function buildDetail(animeUrl: string, rows: CsvRow[]): TitleDetail | null {
     rows.every((r) => (r.kind || '').trim() === 'movie') || looksLikeMovie(title, animeUrl);
 
   const byEp = new Map<number, CsvRow[]>();
+  const epNumOf = (r: CsvRow): number | null => {
+    const n = parseInt(r.episode_number, 10);
+    if (Number.isFinite(n) && n > 0) return n;
+    // رقم العمود مفقود؟ الرقم من الـ label ("الحلقة 10") قبل التسلسل الأعمى
+    const m = (r.label || '').match(/(\d+)/);
+    if (m && Number(m[1]) > 0) return Number(m[1]);
+    return null;
+  };
   for (const r of rows) {
-    const num = parseInt(r.episode_number, 10);
-    if (!Number.isFinite(num) || num <= 0) continue;
+    const num = epNumOf(r);
+    if (num == null) continue;
     const list = byEp.get(num) ?? [];
     list.push(r);
     byEp.set(num, list);
   }
+  const leftovers = rows.filter((r) => epNumOf(r) == null);
   if (byEp.size === 0 && rows.length) {
     // بلا أرقام إطلاقًا (روابط vid مبهمة) — ترقيم تسلسلي بدل الإسقاط
     rows.forEach((r, i) => byEp.set(i + 1, [r]));
+  } else if (leftovers.length) {
+    // صفوف بلا رقم تُلحق بعد الأعلى بدل رميها
+    let top = Math.max(...byEp.keys());
+    for (const r of leftovers) {
+      top += 1;
+      byEp.set(top, [r]);
+    }
   }
   const episodes: EpisodeDetail[] = [...byEp.entries()]
     .sort((a, b) => a[0] - b[0])

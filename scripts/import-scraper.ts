@@ -19,7 +19,7 @@
  */
 import 'dotenv/config';
 import { prisma } from '../src/lib/db';
-import { mergeKey } from '../src/lib/scraper/normalize';
+import { mergeKey, isJunkTitle } from '../src/lib/scraper/normalize';
 import { cleanEpisodeName, seasonRank, seriesKey } from '../src/lib/queries';
 
 interface ScSeries { id: number; canonical_title: string; slug: string }
@@ -163,6 +163,11 @@ async function main() {
   let skipped = 0;
 
   async function getOrCreateTitle(s: ScSeries): Promise<(typeof myTitles)[number] | null> {
+    // سلسلة زائفة (تنقل/قوائم) لا تُنشأ أبدًا — تُراجع فقط
+    if (isJunkTitle(s.canonical_title)) {
+      review.push(`series "${s.canonical_title.slice(0, 40)}": junk canonical — review, never create`);
+      return null;
+    }
     // (أ) رابط المصدر أولًا — الأدق: روابط الأنمي من سيرفرات السلسلة
     const rels = relBySeries.get(s.id) ?? [];
     const urls = new Set<string>();
